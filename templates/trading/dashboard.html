@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% load signaldesk %}
+{% block title %}Auto-trading{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="120">{% endblock %}
+{% block content %}
+<div class="row between">
+  <div>
+    <h1 class="mb-0">Auto-trading</h1>
+    <p class="muted" style="max-width:75ch;margin-top:6px">When on, every fresh TRADE NOW signal is traded on your OANDA account with its stop loss and take profit attached at the broker. Trades close by themselves at take profit or stop loss, then it waits for the next signal.</p>
+  </div>
+  <div class="row">
+    {% if live %}<span class="chip" style="background:var(--sell-soft);color:var(--sell)">LIVE ACCOUNT · REAL MONEY</span>{% else %}<span class="chip">Practice account</span>{% endif %}
+    <form method="post" action="{% url 'trading:switch' %}" {% if not trader.enabled %}onsubmit="return confirm('Switch auto-trading ON{% if live %} with REAL MONEY{% endif %}?')"{% endif %}>{% csrf_token %}
+      {% if trader.enabled %}<button class="btn" type="submit">⏸ Switch OFF</button>
+      {% else %}<button class="btn btn-primary" type="submit" {% if steps %}disabled{% endif %}>▶ Switch ON</button>{% endif %}
+    </form>
+  </div>
+</div>
+
+{% if steps %}
+<section class="card" style="margin:14px 0">
+  <h3>Setup ({{ steps|length }} step{{ steps|length|pluralize }} left)</h3>
+  <ol style="margin:0;padding-left:20px">{% for s in steps %}<li>{{ s }}</li>{% endfor %}</ol>
+</section>
+{% endif %}
+{% if trader.halted_until %}<div class="notice" style="margin:14px 0"><b>Paused:</b> {{ trader.halt_reason }}
+  <form method="post" action="{% url 'trading:resume' %}" style="display:inline">{% csrf_token %}<button class="btn btn-sm" type="submit" onclick="return confirm('Clear the pause and measure losses again from now?')">Resume now</button></form></div>{% endif %}
+{% if trader.last_error %}<div class="msg error" style="margin:14px 0">{{ trader.last_error }}</div>{% endif %}
+
+<div class="grid grid-4" style="margin:16px 0">
+  <div class="card kpi"><div class="label">Status</div><div class="value {% if trader.enabled and not trader.halted_until %}pos{% endif %}" style="font-size:20px">{% if not trader.enabled %}Off{% elif trader.halted_until %}Paused{% else %}On{% endif %}</div></div>
+  <div class="card kpi"><div class="label">Balance</div><div class="value" style="font-size:20px">{% if trader.balance is not None %}{{ trader.balance|floatformat:2 }} <span class="faint" style="font-size:13px">{{ trader.account_currency }}</span>{% else %}—{% endif %}</div></div>
+  <div class="card kpi"><div class="label">Open trades</div><div class="value">{{ open_trades|length }} <span class="faint" style="font-size:13px">/ {{ trader.max_open_trades }}</span></div></div>
+  <div class="card kpi"><div class="label">Closed trades P/L</div><div class="value {% if stats.pl > 0 %}pos{% elif stats.pl < 0 %}neg{% endif %}" style="font-size:20px">{% if stats.n %}{{ stats.pl|floatformat:2 }}{% else %}—{% endif %}</div><div class="faint" style="font-size:12.5px">{{ stats.n }} closed, {{ stats.wins }} won</div></div>
+</div>
+<p class="faint" style="font-size:13px;margin-top:-6px">Last checked {% if trader.last_sync_at %}{{ trader.last_sync_at|timesince }} ago{% else %}never{% endif %} · account {{ trader.account_id|default:"not set" }} · checks after every analysis.</p>
+
+<section class="card" style="margin-bottom:16px">
+  <div class="row between"><h2 class="mb-0">Trades</h2>
+    {% if open_trades %}<form method="post" action="{% url 'trading:close_all' %}" onsubmit="return confirm('Switch auto-trading OFF and close ALL open trades at market now?')">{% csrf_token %}<button class="btn btn-sm btn-danger" type="submit">■ Stop and close all</button></form>{% endif %}
+  </div>
+  <div class="table-wrap" style="box-shadow:none;margin-top:10px"><table>
+    <thead><tr><th>Time</th><th>Pair</th><th>Side</th><th>Status</th><th class="num">Units</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">P/L</th><th>Note</th></tr></thead>
+    <tbody>{% for t in trades %}{% with i=t.instrument %}
+      <tr><td style="white-space:nowrap">{{ t.created_at|date:"j M H:i" }}</td><td class="pair">{{ i.symbol }}</td>
+        <td>{% if t.direction %}<span class="dir {{ t.direction }}"><span class="ball"></span>{{ t.direction|upper }}</span>{% endif %}</td>
+        <td>{% if t.status == "open" %}<span class="chip on"><span class="dot"></span>Open</span>{% elif t.status == "closed" %}{% if t.close_reason == "tp" %}<span class="pos">Take profit</span>{% elif t.close_reason == "sl" %}<span class="neg">Stop loss</span>{% elif t.close_reason == "expired" %}Expired{% else %}Closed{% endif %}{% else %}<span class="faint">{{ t.get_status_display }}</span>{% endif %}</td>
+        <td class="num mono">{% if t.units %}{{ t.units }}{% else %}—{% endif %}</td>
+        <td class="num mono">{% if t.fill_price %}{{ t.fill_price|price:i }}{% else %}—{% endif %}</td>
+        <td class="num mono">{{ t.stop_loss|price:i }}</td><td class="num mono">{{ t.take_profit|price:i }}</td>
+        <td class="num mono {% if t.realized_pl > 0 %}pos{% elif t.realized_pl < 0 %}neg{% endif %}">{% if t.realized_pl is not None %}{{ t.realized_pl|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td class="muted" style="font-size:13px">{{ t.message }}</td></tr>
+    {% endwith %}{% empty %}<tr><td colspan="10" class="empty">No trades yet. When auto-trading is on, every new TRADE NOW signal appears here: traded, or skipped with the reason.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<form method="post" class="stack">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <fieldset>
+    <legend>Account</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.account_id %}
+      {% include "signals/_field.html" with field=form.allow_live %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">The API token and practice/live choice are in Settings → Data source. Auto-trading also needs OANDA as the price source, so the signal's levels match the prices it trades at.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Risk rules</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.risk_percent %}
+      {% include "signals/_field.html" with field=form.max_open_trades %}
+      {% include "signals/_field.html" with field=form.daily_loss_limit %}
+      {% include "signals/_field.html" with field=form.weekly_loss_limit %}
+      {% include "signals/_field.html" with field=form.max_slippage_r %}
+      {% include "signals/_field.html" with field=form.min_confidence %}
+      {% include "signals/_field.html" with field=form.close_on_expiry %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">Position size is calculated so that hitting the stop loss loses about your risk % of the account. Only one trade per pair at a time. No trade is opened close to high-impact news.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Which signals</legend>
+    {% include "signals/_field.html" with field=form.strategies %}
+  </fieldset>
+  <div class="row">
+    <button class="btn btn-primary" type="submit">Save settings</button>
+  </div>
+</form>
+<form method="post" action="{% url 'trading:test' %}" style="margin-top:10px">{% csrf_token %}<button class="btn btn-sm" type="submit">Test connection</button></form>
+<p class="faint" style="font-size:13px;margin-top:18px">Automated trading can lose money, including faster than manual trading. Run it on a practice account until its results there convince you. This is software you control, not financial advice.</p>
+{% endblock %}

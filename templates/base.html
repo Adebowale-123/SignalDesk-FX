@@ -20,6 +20,7 @@
         <a href="{% url 'signals:history' %}" class="{% if '/history/' in p %}active{% endif %}">Track record</a>
         <a href="{% url 'signals:backtests' %}" class="{% if '/backtests/' in p %}active{% endif %}">Backtests</a>
         <a href="{% url 'signals:research' %}" class="{% if '/research/' in p %}active{% endif %}">Research</a>
+        {% if user.is_staff %}<a href="{% url 'trading:dashboard' %}" class="{% if '/auto-trading/' in p %}active{% endif %}">Auto-trading</a>{% endif %}
         {% if user.is_staff %}<a href="{% url 'signals:settings' %}" class="{% if '/settings/' in p %}active{% endif %}">Settings</a>{% endif %}
       </nav>
       {% endwith %}

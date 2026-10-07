@@ -120,6 +120,33 @@ That's about 15,500 combinations. A new strategy is created **only if** the best
 
 Still not connected: AI-written explanations.
 
+## Auto-trading (OANDA)
+
+When switched on, every fresh TRADE NOW signal is traded on your OANDA account:
+
+1. **Checks run first.** It skips a signal (and records why) if:
+   - the pair already has an open trade, or the maximum number of open trades is reached;
+   - high-impact news is close;
+   - price has moved too far from the signal's entry (default: more than a quarter of the stop distance);
+   - confidence is below your minimum;
+   - a daily or weekly loss limit has paused trading.
+2. **The position is sized** so that hitting the stop loss loses about your **risk %** (default 1%).
+3. **A market order is placed with the stop loss and take profit attached at OANDA.** They work even if this server is down.
+4. **Trades close at take profit or stop loss by themselves.** If its signal expires first, it is closed at market (like the backtest). Then the system waits for the next signal.
+5. **Telegram/email messages** go out for every trade opened, closed, rejected or paused.
+
+**Off-switch:** **Switch OFF** stops new trades. **Stop and close all** also closes every open trade.
+
+**Requirements:**
+- OANDA must also be the price source, so signal levels match the prices it trades at.
+- A LIVE (real money) account needs an extra explicit permission tick.
+- Switch auto-trading on in **one place only** (Render, not also a local copy).
+
+**Setup:**
+1. Open an OANDA demo account and generate an API token (OANDA → Manage API Access).
+2. Go to Settings → Data source: choose OANDA, paste the token, account type **Practice**.
+3. Go to Auto-trading → **Test connection** (it finds your account ID) → review the risk rules → **Switch ON**.
+
 ## Deploying on Render (free)
 
 1. Create a free PostgreSQL database at [neon.tech](https://neon.tech) and copy its connection string (`postgresql://...`). A Render workspace only gets one free database, and Neon's free tier doesn't expire.

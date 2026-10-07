@@ -45,6 +45,12 @@ def _deliver(subject, text_html, text_plain, signal=None, kind="new"):
     return sent
 
 
+def notify(subject, lines):
+    """Send a short message (list of lines) to every alert channel."""
+    plain = "\n".join(lines)
+    return _deliver(subject, f"<b>{html.escape(subject)}</b>\n" + html.escape(plain), plain, kind="trade")
+
+
 def _levels(signal):
     i = signal.instrument
     conf = f"{signal.confidence}%" if signal.confidence is not None else "not calibrated yet"

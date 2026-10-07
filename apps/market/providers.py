@@ -146,9 +146,28 @@ class OandaProvider(BaseProvider):
     def symbol_for(self, instrument):
         return instrument.oanda_symbol or instrument.symbol.replace("/", "_")
 
+    HISTORY_PAGES = 5  # 5 × 5000 candles: about 2.5 years of 1H, 7 months of 15m
+
     def fetch(self, instrument, timeframe, *, history=False):
-        params = {"granularity": self.GRANULARITY[timeframe], "count": 5000 if history else 300, "price": "M",
+        if not history:
+            return self._fetch_page(instrument, timeframe, 300)
+        candles, before = [], None
+        for _ in range(self.HISTORY_PAGES):  # page backwards in time
+            page = self._fetch_page(instrument, timeframe, 5000, before)
+            page = [c for c in page if before is None or c["time"] < before]
+            if not page:
+                break
+            candles = page + candles
+            before = page[0]["time"]
+            if len(page) < 4000:
+                break
+        return candles
+
+    def _fetch_page(self, instrument, timeframe, count, before=None):
+        params = {"granularity": self.GRANULARITY[timeframe], "count": count, "price": "M",
                   "alignmentTimezone": "UTC", "dailyAlignment": 0}
+        if before is not None:
+            params["to"] = before.strftime("%Y-%m-%dT%H:%M:%SZ")
         url = f"{self.host}/v3/instruments/{self.symbol_for(instrument)}/candles"
         try:
             response = requests.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"}, timeout=30)

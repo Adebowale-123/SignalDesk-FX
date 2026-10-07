@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "apps.alerts",
     "apps.news",
     "apps.macro",
+    "apps.trading",
 ]
 
 MIDDLEWARE = [

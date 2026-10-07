@@ -213,7 +213,9 @@ def settings_page(request):
         site = form.save()
         if site.data_provider != old_provider:
             Candle.objects.all().delete()  # prices from different sources must not mix
-            messages.info(request, "Data source changed: stored prices were cleared and will be downloaded again.")
+            StrategyProfile.objects.update(last_tuned_at=None)  # re-tune and recalibrate on the new prices
+            messages.info(request, "Data source changed: stored prices were cleared and will be downloaded again. "
+                                   "Each strategy re-tests itself on the new prices automatically.")
         messages.success(request, "Settings saved.")
         return redirect("signals:settings")
     return render(request, "signals/settings.html", {

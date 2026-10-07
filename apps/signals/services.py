@@ -171,6 +171,7 @@ def run_cycle():
                 summary["closed"] += 1
                 if site.alert_on_close:
                     transaction.on_commit(lambda s=sig: alert_closed(s))
+    summary.update(_auto_trade())
     if getattr(settings, "AUTO_MAINTENANCE", True):
         schedule_self_tuning()
         schedule_discovery(site)
@@ -199,6 +200,18 @@ def schedule_discovery(site):
     due = site.last_discovered_at is None or now - site.last_discovered_at >= timedelta(days=site.discover_every_days)
     if due or interrupted:
         background.start("discover", discover)
+
+
+def _auto_trade():
+    """Hand fresh signals to the auto-trader (it does nothing unless it is set up and switched on)."""
+    from apps.trading.services import trade_cycle
+
+    try:
+        result = trade_cycle()
+    except Exception:  # trading problems must never stop the analysis
+        log.exception("Auto-trading cycle failed")
+        return {"trading": "error"}
+    return {f"trading_{k}": v for k, v in result.items()}
 
 
 def schedule_self_tuning():
