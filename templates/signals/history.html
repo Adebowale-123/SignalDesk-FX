@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load signaldesk %}
+{% block title %}Track record{% endblock %}
+{% block content %}
+<h1>Track record</h1>
+<p class="muted">Every TRADE NOW call and what happened next: take profit, stop loss, or expired. Live results, not a backtest.</p>
+{% if profiles|length > 1 %}
+<div class="tabs" style="margin-bottom:14px">{% for p in profiles %}<a href="?profile={{ p.pk }}" class="{% if p == profile %}active{% endif %}">{{ p.name }}</a>{% endfor %}</div>
+{% endif %}
+
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="card kpi"><div class="label">Closed signals</div><div class="value">{{ stats.total }}</div></div>
+  <div class="card kpi"><div class="label">Win rate (TP vs SL)</div><div class="value">{% if stats.win_rate is not None %}{{ stats.win_rate }}%{% else %}—{% endif %}</div></div>
+  <div class="card kpi"><div class="label">Average result</div><div class="value {% if stats.avg_r > 0 %}pos{% elif stats.avg_r < 0 %}neg{% endif %}">{% if stats.avg_r is not None %}{{ stats.avg_r|floatformat:2 }}R{% else %}—{% endif %}</div></div>
+  <div class="card kpi"><div class="label">Open now</div><div class="value">{{ open_count }}</div></div>
+</div>
+
+{% if by_pair %}
+<section class="card" style="margin-bottom:16px">
+  <h3>By pair</h3>
+  <div class="row">{% for p in by_pair %}<span class="chip">{{ p.instrument__symbol }}: {{ p.wins }}/{{ p.n }} won · {{ p.r|floatformat:1 }}R</span>{% endfor %}</div>
+</section>
+{% endif %}
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Signalled</th><th>Pair</th><th>Direction</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Conf.</th><th>Result</th><th class="num">Pips</th><th class="num">R</th></tr></thead>
+    <tbody>
+    {% for s in signals %}
+      <tr class="link" onclick="location.href='{% url 'signals:pair' s.profile_id s.instrument.slug %}'">
+        <td>{{ s.candle_time|date:"D j M, H:i" }}</td><td class="pair">{{ s.instrument }}</td>
+        <td><span class="dir {{ s.direction }}"><span class="ball"></span>{{ s.direction|upper }}</span></td>
+        <td class="num mono">{{ s.entry|price:s.instrument }}</td><td class="num mono">{{ s.stop_loss|price:s.instrument }}</td><td class="num mono">{{ s.take_profit|price:s.instrument }}</td>
+        <td class="num">{% if s.confidence is not None %}{{ s.confidence }}%{% else %}—{% endif %}</td>
+        <td><span class="badge {{ s.status }}">{{ s.get_status_display }}</span>{% if s.closed_at %} <span class="faint" style="font-size:12px">{{ s.closed_at|date:"j M H:i" }}</span>{% endif %}</td>
+        <td class="num mono {% if s.pips > 0 %}pos{% elif s.pips < 0 %}neg{% endif %}">{{ s.pips|default_if_none:"—" }}</td>
+        <td class="num mono {% if s.result_r > 0 %}pos{% elif s.result_r < 0 %}neg{% endif %}">{{ s.result_r|default_if_none:"—" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="10" class="empty">No signals yet. They appear here as soon as the engine says TRADE NOW.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

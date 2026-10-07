@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{% if profile %}Edit {{ profile }}{% else %}New strategy{% endif %}{% endblock %}
+{% block content %}
+<a href="{% url 'signals:settings' %}">← Settings</a>
+<h1 style="margin-top:10px">{% if profile %}Edit strategy{% else %}New strategy{% endif %}</h1>
+<p class="muted">Pick when to look for entries and which bigger timeframes must agree. After saving, run a backtest so the board's confidence matches these rules.</p>
+<form method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <fieldset>
+    <legend>Basics</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.name %}
+      {% include "signals/_field.html" with field=form.is_active %}
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Timeframes</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.entry_timeframe %}
+      {% include "signals/_field.html" with field=form.require_all_confirm %}
+    </div>
+    <div style="margin-top:12px">{% include "signals/_field.html" with field=form.confirm_timeframes %}</div>
+    <div style="margin-top:12px">{% include "signals/_field.html" with field=form.sessions %}</div>
+    <div style="margin-top:12px">{% include "signals/_field.html" with field=form.instruments %}</div>
+  </fieldset>
+  <fieldset>
+    <legend>Stop loss, take profit and strictness</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.risk_reward %}
+      {% include "signals/_field.html" with field=form.sl_method %}
+      {% include "signals/_field.html" with field=form.atr_multiplier %}
+      {% include "signals/_field.html" with field=form.min_score %}
+      {% include "signals/_field.html" with field=form.alert_min_confidence %}
+      {% include "signals/_field.html" with field=form.max_hold_bars %}
+    </div>
+  </fieldset>
+  <details>
+    <summary style="cursor:pointer;font-weight:700;margin-bottom:10px">Indicator settings (advanced)</summary>
+    <fieldset>
+      <div class="form-grid">
+        {% include "signals/_field.html" with field=form.ema_fast %}
+        {% include "signals/_field.html" with field=form.ema_mid %}
+        {% include "signals/_field.html" with field=form.ema_slow %}
+        {% include "signals/_field.html" with field=form.rsi_length %}
+        {% include "signals/_field.html" with field=form.adx_threshold %}
+      </div>
+    </fieldset>
+  </details>
+  <div class="row" style="margin-top:14px"><button class="btn btn-primary" type="submit">Save strategy</button></div>
+</form>
+{% if profile %}
+<form method="post" action="{% url 'signals:profile_delete' profile.pk %}" style="margin-top:24px" onsubmit="return confirm('Delete this strategy and its history?')">
+  {% csrf_token %}<button class="btn btn-sm btn-danger" type="submit">Delete strategy</button>
+</form>
+{% endif %}
+{% endblock %}

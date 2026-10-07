@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% load signaldesk %}
+{% block title %}Signals{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="60">{% endblock %}
+{% block content %}
+<div class="board-head">
+  <div>
+    <div class="board-title">Forex signal engine</div>
+    <h1 class="mb-0">What to trade now</h1>
+    <div class="muted">{% if profile %}{{ profile.timeframes_label }} · {% endif %}{% if last_run %}updated {{ last_run|timesince }} ago{% else %}not analysed yet{% endif %} · refreshes every minute</div>
+  </div>
+  <div class="row">
+    {% for s in sessions %}<span class="chip {% if s.open %}on{% endif %}" title="{{ s.hours }}"><span class="dot"></span>{{ s.name }}</span>{% endfor %}
+    {% if user.is_staff %}
+      <form method="post" action="{% url 'signals:run_now' %}" data-busy="Analysing…">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="btn btn-sm" type="submit">↻ Analyse now</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if profiles|length > 1 %}
+<div class="tabs" style="margin-bottom:14px">
+  {% for p in profiles %}<a href="?profile={{ p.pk }}" class="{% if p == profile %}active{% endif %}">{{ p.name }}</a>{% endfor %}
+</div>
+{% endif %}
+
+{% if not market_open %}<div class="notice" style="margin-bottom:14px">The forex market is closed for the weekend. Signals resume when it reopens (Sunday ~21:00 UTC).</div>{% endif %}
+{% if profile and not calibrated %}<div class="notice" style="margin-bottom:14px">Confidence isn't calibrated yet for this strategy. {% if user.is_staff %}<a href="{% url 'signals:backtests' %}?profile={{ profile.pk }}">Run a backtest</a>{% else %}Ask an admin to run a backtest{% endif %} so confidence reflects real past results.</div>{% endif %}
+
+{% if not profile %}
+  <div class="card empty">No active strategy yet. {% if user.is_staff %}<a href="{% url 'signals:profile_new' %}">Create one in Settings</a>.{% endif %}</div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Pair</th><th>Direction</th><th>Signal</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Confidence</th><th>Why</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      {% with s=r.state i=r.instrument %}
+      <tr class="link" onclick="location.href='{% url 'signals:pair' profile.pk i.slug %}'">
+        <td class="pair"><a href="{% url 'signals:pair' profile.pk i.slug %}" style="color:inherit">{{ i.symbol }}</a><div class="faint mono" style="font-weight:500;font-size:12.5px">{{ s.price|price:i }}</div></td>
+        {% if s and s.decision == "trade" %}
+          <td><span class="dir {{ s.direction }}"><span class="ball"></span>{{ s.direction|upper }}</span></td>
+          <td class="decision trade">TRADE NOW</td>
+          <td class="num mono">{{ s.entry|price:i }}</td><td class="num mono">{{ s.stop_loss|price:i }}</td><td class="num mono">{{ s.take_profit|price:i }}</td>
+          <td class="num">{% if s.confidence is not None %}<span class="conf-bar"><span style="width:{{ s.confidence }}%"></span></span><span class="conf">{{ s.confidence }}%</span>{% else %}<span class="faint">Score {{ s.score }}</span>{% endif %}</td>
+          <td class="why">{{ s.summary|truncatechars:90 }}</td>
+        {% elif s and s.active_signal and s.active_signal.status == "open" %}
+          {% with a=s.active_signal %}
+          <td><span class="dir {{ a.direction }}"><span class="ball"></span>{{ a.direction|upper }}</span></td>
+          <td class="decision inplay">IN PLAY</td>
+          <td class="num mono">{{ a.entry|price:i }}</td><td class="num mono">{{ a.stop_loss|price:i }}</td><td class="num mono">{{ a.take_profit|price:i }}</td>
+          <td class="num">{% if a.confidence is not None %}<span class="conf">{{ a.confidence }}%</span>{% else %}<span class="faint">Score {{ a.score }}</span>{% endif %}</td>
+          <td class="why">Signalled {{ a.candle_time|timesince }} ago — don't chase; manage the open idea.</td>
+          {% endwith %}
+        {% elif s %}
+          <td class="faint">—</td>
+          <td class="decision wait">WAIT</td>
+          <td class="num faint">—</td><td class="num faint">—</td><td class="num faint">—</td>
+          <td class="num"><span class="faint" title="Setup score out of 100 (needs {{ profile.min_score }})">{% if s.direction %}Score {{ s.score }}{% else %}—{% endif %}</span></td>
+          <td class="why">{% if s.error %}<span class="neg">{{ s.error }}</span>{% else %}{{ s.headline|cut:"WAIT — " }}{% endif %}</td>
+        {% else %}
+          <td class="faint">—</td><td class="decision wait">PENDING</td><td class="num faint">—</td><td class="num faint">—</td><td class="num faint">—</td><td class="num faint">—</td>
+          <td class="why">Waiting for the first analysis.</td>
+        {% endif %}
+      </tr>
+      {% endwith %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="faint" style="font-size:13px;margin-top:12px">TRADE NOW = a fresh setup on the latest closed candle. IN PLAY = an earlier signal still open. Confidence = how often similar setups reached take profit before stop loss in the latest backtest. This is decision support, not financial advice.</p>
+{% endif %}
+{% endblock %}

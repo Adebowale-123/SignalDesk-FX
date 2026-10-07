@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% load signaldesk %}
+{% block title %}{{ instrument }}{% endblock %}
+{% block content %}
+<a href="{% url 'signals:board' %}?profile={{ profile.pk }}">← All pairs</a>
+<div class="grid grid-2" style="margin-top:12px;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">
+  {% if state and state.decision == "trade" %}
+  <section class="card signal-card {{ state.direction }}">
+    <h1><span class="ball"></span>{{ instrument }} — {{ state.direction|upper }}</h1>
+    <div class="muted">{{ profile.name }} · candle closed {{ state.candle_time|date:"D j M, H:i" }}</div>
+    <dl class="levels">
+      <dt>Confidence</dt><dd>{% if state.confidence is not None %}{{ state.confidence }}%<small>from the latest backtest</small>{% else %}Not calibrated<small>score {{ state.score }}/100</small>{% endif %}</dd>
+      <dt>Entry</dt><dd>{{ state.entry|price:instrument }}</dd>
+      <dt>Stop Loss</dt><dd>{{ state.stop_loss|price:instrument }}<small>{% distance state.entry state.stop_loss instrument %} pips</small></dd>
+      <dt>Take Profit</dt><dd>{{ state.take_profit|price:instrument }}<small>{% distance state.entry state.take_profit instrument %} pips</small></dd>
+      <dt>Risk/Reward</dt><dd>1:{{ profile.risk_reward|floatformat:"-2" }}</dd>
+    </dl>
+  {% elif active %}
+  <section class="card signal-card {{ active.direction }}">
+    <h1><span class="ball"></span>{{ instrument }} — {{ active.direction|upper }} <span class="badge open">IN PLAY</span></h1>
+    <div class="muted">Signalled {{ active.candle_time|date:"D j M, H:i" }} ({{ active.candle_time|timesince }} ago)</div>
+    <dl class="levels">
+      <dt>Confidence</dt><dd>{% if active.confidence is not None %}{{ active.confidence }}%{% else %}Not calibrated{% endif %}</dd>
+      <dt>Entry</dt><dd>{{ active.entry|price:instrument }}</dd>
+      <dt>Stop Loss</dt><dd>{{ active.stop_loss|price:instrument }}</dd>
+      <dt>Take Profit</dt><dd>{{ active.take_profit|price:instrument }}</dd>
+      <dt>Now</dt><dd>{{ state.price|price:instrument }}</dd>
+    </dl>
+    <div class="notice">This signal is already running. If you missed the entry, don't chase it: wait for the next one.</div>
+  {% else %}
+  <section class="card signal-card wait">
+    <h1><span class="ball"></span>{{ instrument }} — WAIT</h1>
+    <div class="muted">{% if state %}{{ state.headline|cut:"WAIT — " }}{% else %}Not analysed yet.{% endif %}</div>
+    {% if state %}
+    <dl class="levels">
+      <dt>Price</dt><dd>{{ state.price|price:instrument }}</dd>
+      <dt>Setup score</dt><dd>{{ state.score }}/100<small>needs {{ profile.min_score }}</small></dd>
+    </dl>
+    {% endif %}
+  {% endif %}
+    {% if state %}
+    <h3 style="margin-top:16px">Why?</h3>
+    <ul class="whylist">
+      {% for r in state.reasons %}
+        <li class="{{ r.tone }}"><span class="mark">{{ r.tone|tone_mark }}</span><span class="label">{{ r.label }}</span><span class="value">{{ r.value }}</span></li>
+      {% endfor %}
+    </ul>
+    {% if state.summary %}<p style="margin-top:14px">{{ state.summary }}</p>{% endif %}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="row between"><h3 class="mb-0">{{ instrument }} · {{ profile.entry_timeframe }}</h3>
+      <span class="faint" style="font-size:13px">Fast/middle EMA · dashed lines = entry, SL, TP</span></div>
+    <div id="chart" style="margin-top:10px"></div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:16px">
+  <h3>Recent signals on {{ instrument }}</h3>
+  {% if signals %}
+  <div class="table-wrap" style="box-shadow:none">
+    <table>
+      <thead><tr><th>When</th><th>Direction</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Confidence</th><th>Result</th><th class="num">Pips</th></tr></thead>
+      <tbody>
+      {% for s in signals %}
+        <tr><td>{{ s.candle_time|date:"D j M, H:i" }}</td><td><span class="dir {{ s.direction }}"><span class="ball"></span>{{ s.direction|upper }}</span></td>
+          <td class="num mono">{{ s.entry|price:instrument }}</td><td class="num mono">{{ s.stop_loss|price:instrument }}</td><td class="num mono">{{ s.take_profit|price:instrument }}</td>
+          <td class="num">{{ s.confidence|default_if_none:"—" }}{% if s.confidence is not None %}%{% endif %}</td>
+          <td><span class="badge {{ s.status }}">{{ s.get_status_display }}</span></td>
+          <td class="num mono {% if s.pips > 0 %}pos{% elif s.pips < 0 %}neg{% endif %}">{{ s.pips|default_if_none:"—" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty">No signals yet for this pair.</div>{% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(async function () {
+  const el = document.getElementById("chart");
+  if (!window.LightweightCharts) { el.innerHTML = '<p class="empty">Chart library could not load.</p>'; return; }
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const css = getComputedStyle(document.documentElement);
+  const chart = LightweightCharts.createChart(el, {
+    autoSize: true,
+    layout: { background: { color: "transparent" }, textColor: css.getPropertyValue("--muted").trim() },
+    grid: { vertLines: { color: dark ? "#1e2740" : "#eef1f6" }, horzLines: { color: dark ? "#1e2740" : "#eef1f6" } },
+    timeScale: { timeVisible: true, borderVisible: false }, rightPriceScale: { borderVisible: false },
+  });
+  const res = await fetch("{% url 'signals:candles' profile.pk instrument.slug %}");
+  const data = await res.json();
+  if (!data.candles.length) { el.innerHTML = '<p class="empty">No price data yet.</p>'; return; }
+  const precision = { type: "price", precision: data.decimals, minMove: Math.pow(10, -data.decimals) };
+  const candles = chart.addCandlestickSeries({ upColor: "#0f9d63", downColor: "#dc3d4b", borderVisible: false,
+    wickUpColor: "#0f9d63", wickDownColor: "#dc3d4b", priceFormat: precision });
+  candles.setData(data.candles);
+  chart.addLineSeries({ color: "#4f46e5", lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(data.ema_fast);
+  chart.addLineSeries({ color: "#b7791f", lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(data.ema_mid);
+  {% if state and state.decision == "trade" %}{% with e=state.entry sl=state.stop_loss tp=state.take_profit %}
+  const levels = { entry: {{ e }}, sl: {{ sl }}, tp: {{ tp }} };
+  {% endwith %}{% elif active %}
+  const levels = { entry: {{ active.entry }}, sl: {{ active.stop_loss }}, tp: {{ active.take_profit }} };
+  {% else %}const levels = null;{% endif %}
+  if (levels) {
+    const line = (price, color, title) => candles.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title });
+    line(levels.entry, "#4f46e5", "Entry"); line(levels.sl, "#dc3d4b", "SL"); line(levels.tp, "#0f9d63", "TP");
+  }
+  chart.timeScale().fitContent();
+})();
+</script>
+{% endblock %}

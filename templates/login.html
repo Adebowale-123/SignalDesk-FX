@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<div class="card login-box">
+  <div class="logo" style="margin-bottom:14px"><span class="logo-mark">⇅</span>SignalDesk FX</div>
+  <h1>Log in</h1>
+  <p class="muted">Private portal for your team.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="msg error">Wrong username or password.</div>{% endif %}
+    <div class="field"><label for="id_username">Username</label>{{ form.username }}</div>
+    <div class="field" style="margin-top:12px"><label for="id_password">Password</label>{{ form.password }}</div>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn btn-primary" type="submit" style="margin-top:16px;width:100%;justify-content:center">Log in</button>
+  </form>
+</div>
+{% endblock %}

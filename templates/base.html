@@ -1,0 +1,43 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Signals{% endblock %} · SignalDesk FX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=1">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% if user.is_authenticated %}
+  <header class="topbar">
+    <div class="inner">
+      <a class="logo" href="{% url 'signals:board' %}"><span class="logo-mark">⇅</span>SignalDesk FX</a>
+      {% with p=request.path %}
+      <nav class="main" aria-label="Main">
+        <a href="{% url 'signals:board' %}" class="{% if p == '/' or '/pair/' in p %}active{% endif %}">Signals</a>
+        <a href="{% url 'signals:history' %}" class="{% if '/history/' in p %}active{% endif %}">Track record</a>
+        <a href="{% url 'signals:backtests' %}" class="{% if '/backtests/' in p %}active{% endif %}">Backtests</a>
+        {% if user.is_staff %}<a href="{% url 'signals:settings' %}" class="{% if '/settings/' in p %}active{% endif %}">Settings</a>{% endif %}
+      </nav>
+      {% endwith %}
+      <div class="user"><span>{{ user.get_username }}</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-sm" type="submit">Log out</button></form>
+      </div>
+    </div>
+  </header>
+  {% endif %}
+  <main class="page">
+    {% if messages %}<ul class="messages">{% for m in messages %}<li class="msg {{ m.tags }}">{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    // Disable a submit button while its (possibly slow) request runs.
+    document.querySelectorAll("form[data-busy]").forEach(f => f.addEventListener("submit", () => {
+      const b = f.querySelector("button[type=submit]"); if (b) { b.disabled = true; b.textContent = f.dataset.busy; }
+    }));
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

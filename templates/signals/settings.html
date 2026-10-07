@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<p class="muted">Set up your strategies, pairs, data source and alerts. Changes apply on the next analysis.</p>
+
+<section class="card" style="margin-bottom:16px">
+  <div class="row between"><h2 class="mb-0">Strategies</h2><a class="btn btn-primary btn-sm" href="{% url 'signals:profile_new' %}">+ New strategy</a></div>
+  <p class="muted" style="font-size:14px">A strategy decides the timeframes and rules. You can run several side by side and compare their backtests.</p>
+  <div class="table-wrap" style="box-shadow:none"><table>
+    <thead><tr><th>Name</th><th>Timeframes</th><th class="num">R:R</th><th class="num">Min score</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for p in profiles %}
+      <tr><td class="pair">{{ p.name }}</td><td>{{ p.timeframes_label }}</td><td class="num">1:{{ p.risk_reward|floatformat:"-2" }}</td>
+        <td class="num">{{ p.min_score }}</td><td>{% if p.is_active %}<span class="chip on"><span class="dot"></span>Active</span>{% else %}<span class="chip">Off</span>{% endif %}</td>
+        <td class="num"><a class="btn btn-sm" href="{% url 'signals:profile_edit' p.pk %}">Edit</a></td></tr>
+    {% empty %}<tr><td colspan="6" class="empty">No strategies yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="card" style="margin-bottom:16px">
+  <h2>Pairs</h2>
+  <p class="muted" style="font-size:14px">Click a pair to switch it on or off for every strategy.</p>
+  <div class="row">
+    {% for i in instruments %}
+      <form method="post" action="{% url 'signals:toggle_instrument' i.pk %}">{% csrf_token %}
+        <button class="chip {% if i.is_active %}on{% endif %}" type="submit" style="border:0;cursor:pointer;font:inherit;font-weight:700;padding:6px 12px"><span class="dot"></span>{{ i.symbol }}</button>
+      </form>
+    {% endfor %}
+  </div>
+  <p class="faint" style="font-size:13px;margin-bottom:0">To add another pair (for example EUR/JPY), use <a href="/admin/market/instrument/add/">Admin → Instruments</a>.</p>
+</section>
+
+<form method="post" class="stack">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <fieldset>
+    <legend>Price data source</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.data_provider %}
+      {% include "signals/_field.html" with field=form.engine_interval_minutes %}
+      {% include "signals/_field.html" with field=form.twelvedata_api_key %}
+      {% include "signals/_field.html" with field=form.oanda_api_token %}
+      {% include "signals/_field.html" with field=form.oanda_environment %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">Yahoo works with no account. For live trading decisions, a free OANDA practice account gives the most reliable real-time prices (Account → Manage API access → Generate token).</p>
+  </fieldset>
+  <fieldset>
+    <legend>Alerts</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.telegram_bot_token %}
+      {% include "signals/_field.html" with field=form.telegram_chat_id %}
+      {% include "signals/_field.html" with field=form.alert_emails %}
+      {% include "signals/_field.html" with field=form.alert_on_close %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">Telegram: message <b>@BotFather</b> → /newbot to get a token. Then send your bot a message and open <span class="mono">api.telegram.org/bot&lt;token&gt;/getUpdates</span> to find your chat ID.</p>
+  </fieldset>
+  <div class="row"><button class="btn btn-primary" type="submit">Save settings</button></div>
+</form>
+<form method="post" action="{% url 'signals:test_alert' %}" style="margin-top:10px">{% csrf_token %}<button class="btn btn-sm" type="submit">Send a test alert</button></form>
+{% endblock %}
