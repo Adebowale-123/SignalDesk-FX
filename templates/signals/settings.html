@@ -10,7 +10,7 @@
   <div class="table-wrap" style="box-shadow:none"><table>
     <thead><tr><th>Name</th><th>Timeframes</th><th class="num">R:R</th><th class="num">Min score</th><th>Status</th><th></th></tr></thead>
     <tbody>{% for p in profiles %}
-      <tr><td class="pair">{{ p.name }}</td><td>{{ p.timeframes_label }}</td><td class="num">1:{{ p.risk_reward|floatformat:"-2" }}</td>
+      <tr><td class="pair">{{ p.name }}{% if p.discovered %} <span class="chip" title="Built by the system">Auto</span>{% endif %}</td><td>{{ p.timeframes_label }}</td><td class="num">1:{{ p.risk_reward|floatformat:"-2" }}</td>
         <td class="num">{{ p.min_score }}</td><td>{% if p.is_active %}<span class="chip on"><span class="dot"></span>Active</span>{% else %}<span class="chip">Off</span>{% endif %}</td>
         <td class="num"><a class="btn btn-sm" href="{% url 'signals:profile_edit' p.pk %}">Edit</a></td></tr>
     {% empty %}<tr><td colspan="6" class="empty">No strategies yet.</td></tr>{% endfor %}</tbody>
@@ -53,6 +53,15 @@
       {% include "signals/_field.html" with field=form.alert_on_close %}
     </div>
     <p class="faint" style="font-size:13px;margin:12px 0 0">Telegram: message <b>@BotFather</b> → /newbot to get a token. Then send your bot a message and open <span class="mono">api.telegram.org/bot&lt;token&gt;/getUpdates</span> to find your chat ID.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Strategy discovery</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.auto_discover %}
+      {% include "signals/_field.html" with field=form.discover_every_days %}
+      {% include "signals/_field.html" with field=form.max_discovered_active %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">The system builds new strategies from its building blocks, tests them on history, and adds only those that stay profitable on recent data they were not chosen on. Discovered strategies are re-tested weekly and switched off automatically if they stop working. See the Research page.</p>
   </fieldset>
   <div class="row"><button class="btn btn-primary" type="submit">Save settings</button></div>
 </form>

@@ -22,6 +22,7 @@
     </div>
     <div style="margin-top:12px">{% include "signals/_field.html" with field=form.confirm_timeframes %}</div>
     <div style="margin-top:12px">{% include "signals/_field.html" with field=form.sessions %}</div>
+    <div style="margin-top:12px">{% include "signals/_field.html" with field=form.setups %}</div>
     <div style="margin-top:12px">{% include "signals/_field.html" with field=form.instruments %}</div>
   </fieldset>
   <fieldset>
@@ -34,6 +35,14 @@
       {% include "signals/_field.html" with field=form.alert_min_confidence %}
       {% include "signals/_field.html" with field=form.max_hold_bars %}
     </div>
+  </fieldset>
+  <fieldset>
+    <legend>Fundamentals and sentiment</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.macro_filter %}
+      {% include "signals/_field.html" with field=form.avoid_crowded %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">Fundamentals: dollar index, US yields and oil. Sentiment: risk mood (S&amp;P 500, VIX) and how big speculators are positioned (CFTC report). Self-tuning tests whether using them helps this strategy. See the Research page for today's picture.</p>
   </fieldset>
   <fieldset>
     <legend>News</legend>

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -64,6 +65,32 @@ class ReplayTests(TestCase):
             self.assertEqual(fast, brute_force(features, variant, self.instrument))
             self.assertGreater(len(fast), 0)
 
+    def test_fast_replay_matches_engine_with_new_setups_and_filters(self):
+        _, _, features = features_for(self.profile, seed=11)
+        rng = np.random.default_rng(3)  # synthetic fundamentals, sentiment and positioning
+        n = len(features)
+        features["m_fund"] = rng.choice([-1.5, -0.5, 0.0, 0.5, 1.5], n)
+        features["m_sent"] = rng.choice([-1.0, 0.0, 1.0], n)
+        features["m_mood"], features["m_dxy"], features["m_yld"] = 1.0, -1.0, 0.0
+        features["m_oil"], features["m_vix"] = 0.0, 18.0
+        features["cot_b"] = rng.uniform(0, 100, n)
+        features["cot_q"] = rng.uniform(0, 100, n)
+        data = scan(features, self.profile, self.instrument)
+        cases = [
+            {"setups": ["rsi_cross"]}, {"setups": ["macd_cross"], "macro_filter": "not_against"},
+            {"setups": ["pullback", "breakout"], "macro_filter": "aligned"},
+            {"setups": ["pullback", "breakout", "rsi_cross", "macd_cross"], "avoid_crowded": True, "min_score": 50},
+            {"setups": ["breakout", "macd_cross"], "macro_filter": "aligned", "avoid_crowded": True,
+             "sl_method": "atr", "atr_multiplier": 1.5, "risk_reward": 3.0},
+        ]
+        for case in cases:
+            params = {**self.profile.tuned_params(), **case}
+            variant = StrategyProfile(name="V", entry_timeframe="15m", confirm_timeframes=["1h"])
+            variant.apply_params(params)
+            fast = [round(t["r"], 6) for t in simulate(data, params, variant.max_hold_bars)]
+            self.assertEqual(fast, brute_force(features, variant, self.instrument), case)
+            self.assertGreater(len(fast), 0, case)
+
     def test_news_blocks_trades(self):
         _, _, features = features_for(self.profile)
         clean = scan(features, self.profile, self.instrument)
@@ -76,7 +103,7 @@ class ReplayTests(TestCase):
         self.assertIn("news", d.headline)
 
     def test_search_space_size(self):
-        self.assertEqual(len(list(variations())), 1024)
+        self.assertEqual(len(list(variations())), 3072)
 
 
 def stats(trades, total_r, pf=1.5, avg_r=0.2):
@@ -127,7 +154,7 @@ class TuneProfileTests(TestCase):
     def test_real_run_completes(self):
         run = tune_profile(self.profile.pk, download=False)
         self.assertIn(run.outcome, (TuningRun.Outcome.ADOPTED, TuningRun.Outcome.KEPT))
-        self.assertEqual(run.variations, 1024)
+        self.assertEqual(run.variations, 3072)
 
     def test_undo_restores_previous_settings(self):
         with mock.patch("apps.signals.tuning.walk_forward", return_value=self.fake(stats(60, 8), stats(70, -4))):

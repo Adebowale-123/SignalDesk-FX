@@ -25,6 +25,13 @@ class SiteSettings(models.Model):
     calendar_fetched_at = models.DateTimeField(null=True, blank=True, editable=False)
     calendar_ok_at = models.DateTimeField(null=True, blank=True, editable=False,
                                           help_text="Last successful economic calendar download.")
+    macro_fetched_at = models.DateTimeField(null=True, blank=True, editable=False)
+    auto_discover = models.BooleanField(
+        default=True, help_text="Let the system build and test new strategies by itself, and switch on ones that pass.")
+    discover_every_days = models.PositiveSmallIntegerField(default=30, help_text="How often it searches (days).")
+    max_discovered_active = models.PositiveSmallIntegerField(
+        default=3, help_text="At most this many discovered strategies switched on at once.")
+    last_discovered_at = models.DateTimeField(null=True, blank=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

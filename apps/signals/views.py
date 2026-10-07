@@ -10,13 +10,15 @@ from django.views.decorators.http import require_POST
 from apps.alerts.services import send_test
 from apps.core import background
 from apps.core.models import SiteSettings
+from apps.macro.services import MacroData
 from apps.market.models import Candle, Instrument
 from apps.market.providers import ProviderError, get_provider
 from apps.news.services import NewsCalendar, currencies_for
 
+from .discovery import FAMILIES, combinations_per_family, discover, setup_label
 from .engine import SESSION_NAMES, SESSIONS_UTC, active_sessions, market_open
 from .forms import ProfileForm, SiteSettingsForm
-from .models import BacktestRun, PairState, Signal, StrategyProfile, TuningRun
+from .models import BacktestRun, DiscoveryRun, PairState, Signal, StrategyProfile, TuningRun
 from .services import backtest, load_features, run_cycle
 from .tuning import tune_profile
 
@@ -258,3 +260,80 @@ def test_alert(request):
     else:
         messages.error(request, "Nothing sent. Add a Telegram bot token and chat ID, or an email address, then save.")
     return redirect("signals:settings")
+
+
+# --- Research: fundamentals, sentiment and strategy discovery ------------------
+
+
+def _direction(value, up, down, flat):
+    if value is None or value != value:
+        return {"text": "No data", "tone": ""}
+    return {"text": up, "tone": "pos"} if value > 0 else {"text": down, "tone": "neg"} if value < 0 else \
+        {"text": flat, "tone": ""}
+
+
+def describe(params):
+    if not params:
+        return ""
+    parts = [setup_label(params.get("setups") or []),
+             f"min score {params['min_score']}", f"1:{params['risk_reward']:g}",
+             "swing stop" if params["sl_method"] == "swing" else f"{params['atr_multiplier']:g}× ATR stop",
+             f"ADX ≥ {params['adx_threshold']}",
+             " + ".join(s.title().replace("Newyork", "New York") for s in params["sessions"]) or "any session"]
+    macro = params.get("macro_filter", "off")
+    if macro != "off":
+        parts.append({"not_against": "skips trades fundamentals/sentiment oppose",
+                      "aligned": "only when fundamentals/sentiment agree"}[macro])
+    if params.get("avoid_crowded"):
+        parts.append("avoids crowded trades")
+    return "; ".join(parts)
+
+
+def research(request):
+    snap = MacroData.cached().snapshot()
+    drivers, positioning = [], []
+    if snap:
+        drivers = [
+            ("Risk mood", _direction(snap["mood"], "Risk-on", "Risk-off", "Mixed"),
+             "S&P 500 trend and VIX stress. Risk-on lifts AUD, NZD, CAD; risk-off lifts JPY, CHF, gold, USD."),
+            ("VIX (fear index)", {"text": f"{snap['vix']:.1f}", "tone": "neg" if snap["vix"] > 25 else ""},
+             "Above 25, or up sharply from its average, counts as stress."),
+            ("US dollar index", _direction(snap["dxy"], "Rising", "Falling", "Flat"),
+             "Versus its 50-day average. A rising dollar favours USD over the other currencies and weighs on gold."),
+            ("US 10-year yield", _direction(snap["yld"], "Rising", "Falling", "Steady"),
+             "20-day change. Rising yields support USD and hurt gold."),
+            ("Crude oil", _direction(snap["oil"], "Rising", "Falling", "Flat"), "Supports CAD when rising."),
+        ]
+        for currency, c in snap["cot"].items():
+            idx = c["index"]
+            positioning.append({"currency": "Gold" if currency == "XAU" else currency, "net": c["net"], "index": idx,
+                                "as_of": c["as_of"],
+                                "label": "Crowded long" if idx is not None and idx > 90 else
+                                "Crowded short" if idx is not None and idx < 10 else
+                                "Net long" if c["net"] > 0 else "Net short"})
+    runs = list(DiscoveryRun.objects.prefetch_related("created")[:6])
+    run = runs[0] if runs else None
+    rows = []
+    if run:
+        for e in run.results:
+            rows.append({**e, "summary": describe(e.get("best"))})
+    site = SiteSettings.load()
+    return render(request, "signals/research.html", {
+        "snap": snap, "drivers": drivers, "positioning": positioning, "run": run, "rows": rows,
+        "older": runs[1:], "running": background.is_running("discover"), "site": site,
+        "discovered": StrategyProfile.objects.filter(discovered=True).order_by("-is_active", "-created_at"),
+        "per_family": combinations_per_family(), "families": FAMILIES,
+        "next_run": site.last_discovered_at + timedelta(days=site.discover_every_days)
+        if site.auto_discover and site.last_discovered_at else None,
+    })
+
+
+@staff_member_required
+@require_POST
+def discover_now(request):
+    if background.start("discover", discover):
+        messages.success(request, "Strategy discovery started. It tests thousands of combinations and can take a "
+                                  "while; this page refreshes until it's done.")
+    else:
+        messages.info(request, "Strategy discovery is already running.")
+    return redirect("signals:research")

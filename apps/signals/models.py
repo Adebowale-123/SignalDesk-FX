@@ -15,6 +15,15 @@ def default_sessions():
     return ["london", "newyork"]
 
 
+def default_setups():
+    return ["pullback", "breakout"]
+
+
+MACRO_FILTER_CHOICES = [("off", "Show only (don't block trades)"),
+                        ("not_against", "Block trades they point against"),
+                        ("aligned", "Trade only when they support the direction")]
+
+
 class StrategyProfile(models.Model):
     """A set of rules you control: which timeframes, how strict, how to place SL/TP."""
 
@@ -48,6 +57,13 @@ class StrategyProfile(models.Model):
                                 help_text="Only signal during these sessions. Empty = any time the market is open.")
     max_hold_bars = models.PositiveSmallIntegerField(default=48,
                                                      help_text="Close the signal as expired after this many entry candles.")
+    setups = models.JSONField(default=default_setups, blank=True, help_text="Entry setups this strategy trades.")
+    macro_filter = models.CharField(max_length=12, choices=MACRO_FILTER_CHOICES, default="off",
+                                    help_text="How fundamentals and sentiment affect decisions.")
+    avoid_crowded = models.BooleanField(default=False,
+                                        help_text="Skip trades where speculators are at a 3-year positioning extreme.")
+    discovered = models.BooleanField(default=False, editable=False,
+                                     help_text="Built by the system; switched off automatically if it stops working.")
     # News: say WAIT around scheduled economic releases for either currency of the pair.
     news_filter = models.BooleanField(default=True, help_text="Say WAIT around high-impact economic news.")
     news_minutes_before = models.PositiveSmallIntegerField(default=30, help_text="Minutes before the release.")
@@ -79,12 +95,14 @@ class StrategyProfile(models.Model):
         chosen = self.instruments.filter(is_active=True)
         return chosen if chosen.exists() else Instrument.objects.filter(is_active=True)
 
-    TUNED_FIELDS = ("min_score", "risk_reward", "sl_method", "atr_multiplier", "adx_threshold", "sessions")
+    TUNED_FIELDS = ("min_score", "risk_reward", "sl_method", "atr_multiplier", "adx_threshold", "sessions",
+                    "macro_filter", "setups", "avoid_crowded")
 
     def tuned_params(self):
         return {"min_score": self.min_score, "risk_reward": float(self.risk_reward), "sl_method": self.sl_method,
                 "atr_multiplier": float(self.atr_multiplier), "adx_threshold": self.adx_threshold,
-                "sessions": list(self.sessions or [])}
+                "sessions": list(self.sessions or []), "macro_filter": self.macro_filter,
+                "setups": list(self.setups or default_setups()), "avoid_crowded": self.avoid_crowded}
 
     def apply_params(self, params):
         for name in self.TUNED_FIELDS:
@@ -223,7 +241,9 @@ class TuningRun(models.Model):
     def changes(self):
         """[(label, old, new)] for the settings that changed."""
         labels = {"min_score": "Minimum score", "risk_reward": "Risk : reward", "sl_method": "Stop loss method",
-                  "atr_multiplier": "ATR multiplier", "adx_threshold": "ADX threshold", "sessions": "Sessions"}
+                  "atr_multiplier": "ATR multiplier", "adx_threshold": "ADX threshold", "sessions": "Sessions",
+                  "macro_filter": "Fundamentals & sentiment", "setups": "Entry setups",
+                  "avoid_crowded": "Avoid crowded trades"}
         out = []
         for key, label in labels.items():
             old, new = self.previous_params.get(key), self.best_params.get(key)
@@ -233,6 +253,15 @@ class TuningRun(models.Model):
 
 
 def _fmt_param(key, value):
+    if key == "macro_filter":
+        return dict(MACRO_FILTER_CHOICES).get(value, value)
+    if key == "setups":
+        from .engine import SETUP_CHOICES
+
+        names = dict(SETUP_CHOICES)
+        return ", ".join(names.get(s, s) for s in value) if value else "—"
+    if key == "avoid_crowded":
+        return "Yes" if value else "No"
     if key == "sessions":
         names = dict(SESSION_CHOICES)
         return ", ".join(names.get(s, s).split(" (")[0] for s in value) if value else "Any time"
@@ -241,3 +270,20 @@ def _fmt_param(key, value):
     if key == "risk_reward":
         return f"1:{value:g}"
     return value if not isinstance(value, float) else f"{value:g}"
+
+
+class DiscoveryRun(models.Model):
+    """One search for new strategies built from the engine's building blocks."""
+
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished = models.BooleanField(default=False)
+    combinations = models.PositiveIntegerField(default=0)
+    results = models.JSONField(default=list, blank=True)  # one entry per timeframe family
+    created = models.ManyToManyField(StrategyProfile, blank=True, related_name="discovered_by")
+    message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"Discovery {self.started_at:%Y-%m-%d %H:%M}"

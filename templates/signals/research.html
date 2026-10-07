@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Research{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
+{% block content %}
+<h1>Research</h1>
+<p class="muted" style="max-width:75ch">What the system knows beyond the charts: fundamentals, market sentiment and speculator positioning (updated automatically), and the new strategies it has searched for by itself.</p>
+
+<div class="grid grid-2" style="margin-bottom:16px">
+  <section class="card">
+    <h2>Fundamentals &amp; risk mood</h2>
+    {% if snap %}
+    <p class="faint" style="font-size:13px;margin-top:-4px">Daily closes up to {{ snap.as_of|date:"j M Y" }}.</p>
+    <div class="table-wrap" style="box-shadow:none"><table>
+      <tbody>{% for name, value, help in drivers %}
+        <tr><td><b>{{ name }}</b><div class="faint" style="font-size:12.5px">{{ help }}</div></td>
+          <td class="num {{ value.tone }}" style="white-space:nowrap;font-weight:700">{{ value.text }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted">Market data is still downloading. It appears after the next analysis.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Speculator positioning</h2>
+    <p class="faint" style="font-size:13px;margin-top:-4px">CFTC Commitments of Traders: large speculators' net position, and where it sits in its 3-year range. Near 0% or 100% the trade is crowded and prone to reversing.</p>
+    {% if positioning %}
+    <div class="table-wrap" style="box-shadow:none"><table>
+      <thead><tr><th>Currency</th><th class="num">Net contracts</th><th>3-year range</th><th></th></tr></thead>
+      <tbody>{% for c in positioning %}
+        <tr><td class="pair">{{ c.currency }}</td><td class="num mono {% if c.net > 0 %}pos{% else %}neg{% endif %}">{{ c.net }}</td>
+          <td>{% if c.index is not None %}<span class="conf-bar"><span style="width:{{ c.index }}%"></span></span><span class="mono">{{ c.index }}%</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+          <td class="{% if 'Crowded' in c.label %}neg{% else %}muted{% endif %}" style="font-size:13.5px">{{ c.label }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <p class="faint" style="font-size:12.5px;margin-bottom:0">Report of {{ positioning.0.as_of|date:"j M Y" }} (published the following Friday).</p>
+    {% else %}<p class="muted">Positioning data is still downloading.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-bottom:16px">
+  <div class="row between">
+    <div><h2 class="mb-0">Strategy discovery</h2>
+      <p class="muted" style="font-size:14px;margin:4px 0 0">{% if site.auto_discover %}Automatic: every {{ site.discover_every_days }} days{% if next_run %}, next around {{ next_run|date:"j M" }}{% endif %}.{% else %}Automatic search is off (Settings).{% endif %}
+      Tries {{ per_family }} combinations of entry setups, fundamental/sentiment filters, crowding, score, risk : reward, stops, ADX and sessions in each of {{ families|length }} timeframe families. A strategy is added only if the best combination is also profitable on recent data it wasn't chosen on (at least 30 trades, profit factor 1.2 or more).</p></div>
+    {% if running %}<span class="chip on"><span class="dot"></span>Searching… this page refreshes itself</span>
+    {% elif user.is_staff %}<form method="post" action="{% url 'signals:discover_now' %}" data-busy="Starting…">{% csrf_token %}<button class="btn btn-sm" type="submit">⚗ Discover now</button></form>{% endif %}
+  </div>
+  {% if run %}
+    <p style="margin:14px 0 8px"><b>{{ run.started_at|date:"j M Y H:i" }}:</b> {% if run.finished %}{{ run.message }}{% else %}<span class="muted">Did not finish (the server restarted). It will run again automatically.</span>{% endif %}</p>
+    {% if rows %}
+    <div class="table-wrap" style="box-shadow:none"><table>
+      <thead><tr><th>Timeframes</th><th>Best combination found</th><th class="num">Unseen trades</th><th class="num">Profit factor</th><th class="num">Total R</th><th>Result</th></tr></thead>
+      <tbody>{% for r in rows %}
+        <tr><td style="white-space:nowrap">{{ r.family }}</td>
+          <td style="font-size:13.5px">{{ r.summary|default:"—" }}{% if r.note %}<span class="faint">{{ r.note }}</span>{% endif %}</td>
+          <td class="num">{{ r.test.trades|default:"—" }}</td><td class="num">{{ r.test.profit_factor|default:"—" }}</td>
+          <td class="num mono {% if r.test.total_r > 0 %}pos{% elif r.test.total_r < 0 %}neg{% endif %}">{{ r.test.total_r|default:"—" }}</td>
+          <td>{% if r.passed %}<span class="chip on"><span class="dot"></span>Passed</span>{% else %}<span class="chip">Not good enough</span>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  {% else %}
+    <p class="faint" style="margin:12px 0 0">No search yet. {% if site.auto_discover %}The first one starts automatically with the next analysis.{% endif %}</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Strategies built by the system</h2>
+  {% if discovered %}
+  <div class="table-wrap" style="box-shadow:none"><table>
+    <thead><tr><th>Name</th><th>Timeframes</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for p in discovered %}
+      <tr><td class="pair">{{ p.name }}</td><td>{{ p.timeframes_label }}</td>
+        <td>{% if p.is_active %}<span class="chip on"><span class="dot"></span>On</span>{% else %}<span class="chip">Off</span>{% endif %}</td>
+        <td class="num"><a class="btn btn-sm" href="{% url 'signals:backtests' %}?profile={{ p.pk }}">Results</a>{% if p.is_active %} <a class="btn btn-sm" href="{% url 'signals:board' %}?profile={{ p.pk }}">Signals</a>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="faint" style="font-size:13px;margin-bottom:0">Each one is re-tested weekly by self-tuning and switched off automatically when it stops working on recent data.</p>
+  {% else %}<p class="muted" style="margin-bottom:0">None yet. The system only adds a strategy when the evidence is there.</p>{% endif %}
+</section>
+{% endblock %}

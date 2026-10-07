@@ -10,6 +10,7 @@ from django.utils import timezone as dj_tz
 
 from apps.core.models import SiteSettings
 from apps.market.data import load_frame, update_candles
+from apps.macro.services import MacroData, refresh_macro
 from apps.market.providers import ProviderError, get_provider
 from apps.news.services import NewsCalendar, refresh_calendar
 
@@ -62,7 +63,7 @@ def load_features(profile, instrument, provider, *, limit=600):
     htf = {tf: load_frame(instrument, tf, provider, limit=max(300, limit // 4)) for tf in profile.clean_confirm()}
     if entry_df.empty:
         return None
-    return build_features(entry_df, htf, profile)
+    return MacroData.cached().attach(build_features(entry_df, htf, profile), instrument)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +150,7 @@ def run_cycle():
         log.error("Data source not ready: %s", exc)
         return {"error": str(exc)}
     refresh_calendar()
+    refresh_macro()
     news = NewsCalendar.load()
     for profile in StrategyProfile.objects.filter(is_active=True):
         run = profile.backtests.first()
@@ -171,7 +173,32 @@ def run_cycle():
                     transaction.on_commit(lambda s=sig: alert_closed(s))
     if getattr(settings, "AUTO_MAINTENANCE", True):
         schedule_self_tuning()
+        schedule_discovery(site)
     return dict(summary)
+
+
+# A job that started this long ago without finishing was cut off (e.g. the server restarted): run it again.
+RETRY_AFTER = timedelta(hours=3)
+
+
+def schedule_discovery(site):
+    """Search for new strategies in the background when due (monthly by default)."""
+    from apps.core import background
+
+    from .discovery import discover
+
+    if not site.auto_discover:
+        return
+    from .models import DiscoveryRun
+
+    if background.is_running("discover"):
+        return
+    now = dj_tz.now()
+    last = DiscoveryRun.objects.first()
+    interrupted = last is not None and not last.finished and now - last.started_at >= RETRY_AFTER
+    due = site.last_discovered_at is None or now - site.last_discovered_at >= timedelta(days=site.discover_every_days)
+    if due or interrupted:
+        background.start("discover", discover)
 
 
 def schedule_self_tuning():
@@ -182,8 +209,13 @@ def schedule_self_tuning():
 
     now = dj_tz.now()
     for profile in StrategyProfile.objects.filter(is_active=True, auto_tune=True):
-        due = profile.last_tuned_at is None or now - profile.last_tuned_at >= timedelta(days=profile.tune_every_days)
-        if due and not background.is_running(f"backtest:{profile.pk}"):
+        last = profile.last_tuned_at
+        if background.is_running(f"tune:{profile.pk}") or background.is_running(f"backtest:{profile.pk}"):
+            continue
+        due = last is None or now - last >= timedelta(days=profile.tune_every_days)
+        interrupted = (last is not None and now - last >= RETRY_AFTER
+                       and not profile.tunings.filter(started_at__gte=last).exists())
+        if due or interrupted:
             background.start(f"tune:{profile.pk}", tune_profile, profile.pk)
 
 

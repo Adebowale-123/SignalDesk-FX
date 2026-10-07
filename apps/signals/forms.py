@@ -3,6 +3,7 @@ from django import forms
 from apps.core.models import SiteSettings
 from apps.market.models import TIMEFRAMES, Instrument
 
+from .engine import SETUP_CHOICES
 from .models import SESSION_CHOICES, StrategyProfile
 
 TF_CHOICES = [(tf, tf.upper()) for tf in TIMEFRAMES]
@@ -18,6 +19,10 @@ class ProfileForm(forms.ModelForm):
         choices=SESSION_CHOICES, required=False, widget=forms.CheckboxSelectMultiple,
         label="Trading sessions", help_text="Only give signals during these sessions. None ticked = any time.",
     )
+    setups = forms.MultipleChoiceField(
+        choices=SETUP_CHOICES, widget=forms.CheckboxSelectMultiple, label="Entry setups",
+        help_text="Which entry patterns this strategy trades (it takes the first one that appears).",
+    )
     instruments = forms.ModelMultipleChoiceField(
         queryset=Instrument.objects.filter(is_active=True), required=False, widget=forms.CheckboxSelectMultiple,
         label="Pairs", help_text="None ticked = every active pair.",
@@ -29,7 +34,7 @@ class ProfileForm(forms.ModelForm):
                   "sessions", "risk_reward", "sl_method", "atr_multiplier", "min_score", "alert_min_confidence",
                   "adx_threshold", "ema_fast", "ema_mid", "ema_slow", "rsi_length", "max_hold_bars",
                   "news_filter", "news_minutes_before", "news_minutes_after", "news_include_medium",
-                  "auto_tune", "tune_every_days"]
+                  "auto_tune", "tune_every_days", "setups", "macro_filter", "avoid_crowded"]
         labels = {"is_active": "Active", "entry_timeframe": "Entry timeframe", "require_all_confirm": "All must agree",
                   "risk_reward": "Risk : reward (TP = this × SL)", "sl_method": "Stop loss placement",
                   "atr_multiplier": "ATR multiplier", "min_score": "Minimum setup score",
@@ -38,7 +43,8 @@ class ProfileForm(forms.ModelForm):
                   "max_hold_bars": "Expire after (entry candles)", "news_filter": "Avoid high-impact news",
                   "news_minutes_before": "Minutes before news", "news_minutes_after": "Minutes after news",
                   "news_include_medium": "Also avoid medium-impact news", "auto_tune": "Self-tuning",
-                  "tune_every_days": "Re-test every (days)"}
+                  "tune_every_days": "Re-test every (days)", "macro_filter": "Fundamentals & sentiment",
+                  "avoid_crowded": "Avoid crowded trades"}
 
     def clean(self):
         data = super().clean()
@@ -72,14 +78,17 @@ class SiteSettingsForm(forms.ModelForm):
         model = SiteSettings
         fields = ["data_provider", "twelvedata_api_key", "oanda_api_token", "oanda_environment",
                   "engine_interval_minutes", "telegram_bot_token", "telegram_chat_id", "alert_emails",
-                  "alert_on_close"]
+                  "alert_on_close", "auto_discover", "discover_every_days", "max_discovered_active"]
         widgets = {"twelvedata_api_key": SecretInput(), "oanda_api_token": SecretInput(),
                    "telegram_bot_token": SecretInput(), "alert_emails": forms.Textarea(attrs={"rows": 3})}
         labels = {"data_provider": "Price data source", "twelvedata_api_key": "Twelve Data API key",
                   "oanda_api_token": "OANDA API token", "oanda_environment": "OANDA account type",
                   "engine_interval_minutes": "Run analysis every (minutes)", "telegram_bot_token": "Telegram bot token",
                   "telegram_chat_id": "Telegram chat ID", "alert_emails": "Alert emails",
-                  "alert_on_close": "Also alert when a signal hits TP or SL"}
+                  "alert_on_close": "Also alert when a signal hits TP or SL",
+                  "auto_discover": "Discover new strategies automatically",
+                  "discover_every_days": "Search every (days)",
+                  "max_discovered_active": "Most discovered strategies switched on"}
 
     SECRETS = ("twelvedata_api_key", "oanda_api_token", "telegram_bot_token")
 

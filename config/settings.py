@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "apps.signals",
     "apps.alerts",
     "apps.news",
+    "apps.macro",
 ]
 
 MIDDLEWARE = [

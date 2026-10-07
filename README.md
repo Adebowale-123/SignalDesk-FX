@@ -25,7 +25,7 @@ It doesn't place trades or connect to a broker, and it holds no money. It only s
 5. **Shows confidence from real past results.** Confidence is the percentage of similar-scoring setups that reached take profit before stop loss in the latest backtest. Until a backtest has run, the board shows the score instead.
 6. **Tracks every signal** to TP, SL or expiry (Track record page).
 7. **Sends alerts** by Telegram and/or email.
-8. **Avoids news and re-tests itself automatically** (see below).
+8. **Avoids news, reads fundamentals and sentiment, re-tests itself and discovers new strategies automatically** (see below).
 
 ## Quick start (Windows)
 
@@ -97,7 +97,28 @@ Every self-test is logged on the Backtests page, with before/after settings and 
 
 Self-tuning only adjusts those settings within fixed rules. It can't invent new strategies, and a strategy that passes is still not guaranteed to keep working. Trust it only after it also holds up on the Track record page.
 
-Still not connected: fundamental and sentiment data, and AI-written explanations.
+## Fundamentals and sentiment (automatic)
+
+Every few hours it downloads free data, with no keys needed:
+
+- **Fundamentals:** dollar index trend and US 10-year yield direction (Yahoo). These are the main USD drivers; gold moves the opposite way. Oil drives CAD.
+- **Sentiment, risk mood:** S&P 500 trend and VIX stress. Risk-on favours AUD, NZD and CAD; risk-off favours JPY, CHF, USD and gold.
+- **Sentiment, positioning:** the weekly CFTC Commitments of Traders report shows how large speculators are positioned in each currency and in gold. A 3-year extreme is flagged as a **crowded trade**.
+
+Each pair's "Why?" list shows both. Per strategy you choose whether they only inform, block opposing trades, or are required to agree, and whether to skip crowded trades. Self-tuning tests these options too. Values are used only after they were published (daily closes the next day, COT from the Saturday after), so backtests can't peek ahead. The **Research** page shows today's picture.
+
+## Strategy discovery (automatic)
+
+About once a month (Settings → Strategy discovery) the system builds new strategies itself. It combines:
+
+- 4 entry setups: pullback, breakout, RSI turn, MACD turn
+- 4 timeframe families
+- the fundamental/sentiment filters and the crowded-trade rule
+- score, risk : reward, stop, ADX and session choices
+
+That's about 15,500 combinations. A new strategy is created **only if** the best combination for a family is also profitable on recent data it wasn't chosen on: at least 30 trades, profit factor of at least 1.2. Passing strategies are switched on (up to a limit) and marked **Auto**. They're re-tested weekly by self-tuning and **switched off automatically** if they stop working. On Render's free server a search can take about an hour. If it's cut off, it retries automatically.
+
+Still not connected: AI-written explanations.
 
 ## Deploying on Render (free)
 
