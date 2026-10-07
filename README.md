@@ -84,15 +84,15 @@ Treat the portal as a measuring tool. Change one setting at a time, re-run the b
 
 ## Deploying on Render (free)
 
-1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`, which creates a web service and a PostgreSQL database.
-2. When asked, type **ADMIN_USERNAME** and **ADMIN_PASSWORD**. That becomes your first login.
-3. After it's live, log in. Go to **Backtests → Run backtest** for each strategy you use; this calibrates confidence.
-4. **Keep it running 24/7.** Free services sleep after 15 minutes without visitors, and the analysis stops while it sleeps. To prevent this:
+1. Create a free PostgreSQL database at [neon.tech](https://neon.tech) and copy its connection string (`postgresql://...`). A Render workspace only gets one free database, and Neon's free tier doesn't expire.
+2. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`, which creates the web service.
+3. When asked, paste the Neon string as **DATABASE_URL**, and type **ADMIN_USERNAME** and **ADMIN_PASSWORD**. That becomes your first login.
+4. After it's live, log in. Go to **Backtests → Run backtest** for each strategy you use; this calibrates confidence.
+5. **Keep it running 24/7.** Free services sleep after 15 minutes without visitors, and the analysis stops while it sleeps. To prevent this:
    - Copy `ENGINE_TICK_KEY` from Render → Environment.
    - Create a free job at [cron-job.org](https://cron-job.org) that opens `https://<your-app>.onrender.com/engine/tick/?key=<ENGINE_TICK_KEY>` every 5 minutes. This keeps the service awake and runs the analysis.
 
 Notes:
-- Render's free PostgreSQL expires after 30 days unless upgraded.
 - If Yahoo blocks the server, switch to Twelve Data in Settings → Data source. It needs a free key from twelvedata.com.
 
 ## Tests
