@@ -87,6 +87,9 @@ TEMPLATES = [
 ]
 WSGI_APPLICATION = "config.wsgi.application"
 
+# On a host the disk is wiped on every restart, so SQLite would silently lose all data there.
+if RENDER_HOSTNAME and not env("DATABASE_URL"):
+    raise RuntimeError("DATABASE_URL must be set on Render (e.g. a Neon PostgreSQL connection string).")
 DATABASES = {"default": dj_database_url.config(default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}", conn_max_age=600, conn_health_checks=True)}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
