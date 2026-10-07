@@ -129,6 +129,8 @@ if not DEBUG:
 
 # Run the analysis on incoming requests (throttled) when there is no background worker (e.g. free hosting).
 ENGINE_ON_REQUEST = env_bool("ENGINE_ON_REQUEST", False)
+# Secret for /engine/tick/?key=... (an external scheduler calls it to run the analysis on a schedule).
+ENGINE_TICK_KEY = env("ENGINE_TICK_KEY", "")
 
 TESTING = len(os.sys.argv) > 1 and os.sys.argv[1] == "test"
 if TESTING:

@@ -1,0 +1,41 @@
+# Render Blueprint: one web service + one PostgreSQL database.
+# Deploy: Render dashboard -> New -> Blueprint -> pick the SignalDesk-FX repo.
+databases:
+  - name: signaldesk-db
+    plan: free
+    databaseName: signaldesk
+    user: signaldesk
+
+services:
+  - type: web
+    name: signaldesk-fx
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    # One process so background jobs (analysis, backtests) are tracked in one place; threads serve pages meanwhile.
+    startCommand: "gunicorn config.wsgi:application --workers 1 --threads 4 --timeout 120"
+    healthCheckPath: /healthz/
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.14.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: signaldesk-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: TIME_ZONE
+        value: Africa/Lagos
+      # No always-on worker on the free plan: run the analysis when someone opens the portal,
+      # and from an external scheduler calling /engine/tick/?key=ENGINE_TICK_KEY every 5 minutes.
+      - key: ENGINE_ON_REQUEST
+        value: "true"
+      - key: ENGINE_TICK_KEY
+        generateValue: true
+      # First admin login. You type these in Render when deploying; they are never in git.
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

@@ -2,7 +2,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
 
-OPEN_PATHS = ("/login/", "/admin/", "/static/", "/healthz/")
+OPEN_PATHS = ("/login/", "/admin/", "/static/", "/healthz/", "/engine/tick/")
 
 
 class LoginRequiredMiddleware:
@@ -31,12 +31,14 @@ class EngineOnRequestMiddleware:
 
             minutes = SiteSettings.load().engine_interval_minutes
             if cache.add("engine:last-run", True, max(60, minutes * 60)):
-                try:
-                    from apps.signals.services import run_cycle
-
-                    run_cycle()
-                except Exception:  # never break a page
-                    import logging
-
-                    logging.getLogger("apps.signals").exception("Engine run on request failed")
+                start_engine()
         return self.get_response(request)
+
+
+def start_engine():
+    """Run one analysis cycle in the background (skipped if one is already running)."""
+    from apps.signals.services import run_cycle
+
+    from . import background
+
+    return background.start("engine", run_cycle)

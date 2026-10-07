@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Backtests{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
 {% block content %}
 <div class="row between">
   <div>
     <h1>Backtests</h1>
     <p class="muted" style="max-width:70ch">A backtest replays your strategy over past prices, one trade at a time per pair, exactly as the live board would have called it. Its results set the confidence shown on the board.</p>
   </div>
-  {% if profile and user.is_staff %}
-  <form method="post" action="{% url 'signals:run_backtest' profile.pk %}" data-busy="Running… (1–3 min)">{% csrf_token %}
+  {% if running %}
+  <span class="chip on"><span class="dot"></span>Backtest running… this page refreshes itself</span>
+  {% elif profile and user.is_staff %}
+  <form method="post" action="{% url 'signals:run_backtest' profile.pk %}" data-busy="Starting…">{% csrf_token %}
     <button class="btn btn-primary" type="submit">▶ Run backtest</button>
   </form>
   {% endif %}

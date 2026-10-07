@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.alerts.services import send_test
+from apps.core import background
 from apps.core.models import SiteSettings
 from apps.market.models import Candle, Instrument
 from apps.market.providers import ProviderError, get_provider
@@ -112,27 +113,29 @@ def backtests(request):
     profile, profiles = _profile(request)
     runs = BacktestRun.objects.filter(profile=profile)[:10] if profile else []
     breakeven = round(100 / (1 + float(profile.risk_reward))) if profile else None
-    return render(request, "signals/backtests.html", {"profile": profile, "profiles": profiles, "runs": runs,
-                                                      "latest": runs[0] if runs else None, "breakeven": breakeven})
+    return render(request, "signals/backtests.html", {
+        "profile": profile, "profiles": profiles, "runs": runs, "latest": runs[0] if runs else None,
+        "breakeven": breakeven, "running": bool(profile and background.is_running(f"backtest:{profile.pk}")),
+    })
 
 
 @staff_member_required
 @require_POST
 def run_backtest(request, profile_id):
     profile = get_object_or_404(StrategyProfile, pk=profile_id)
-    try:
-        run = backtest(profile)
-    except ProviderError as exc:
-        messages.error(request, f"Backtest could not download prices: {exc}")
-        return redirect(f"/backtests/?profile={profile.pk}")
-    messages.success(request, f"Backtest finished: {run.trades} trades, win rate {run.win_rate}%. "
-                              "Confidence on the board now uses these results.")
+    if background.start(f"backtest:{profile.pk}", backtest, profile):
+        messages.success(request, "Backtest started. It takes about 1–5 minutes; this page refreshes until it's done.")
+    else:
+        messages.info(request, "A backtest for this strategy is already running.")
     return redirect(f"/backtests/?profile={profile.pk}")
 
 
 @staff_member_required
 @require_POST
 def run_now(request):
+    if background.is_running("engine"):
+        messages.info(request, "An analysis is already running. Refresh in a moment.")
+        return redirect(request.POST.get("next") or "signals:board")
     summary = run_cycle()
     if summary.get("error"):
         messages.error(request, f"Analysis could not run: {summary['error']}")

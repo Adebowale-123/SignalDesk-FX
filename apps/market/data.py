@@ -32,6 +32,8 @@ def update_candles(instrument, timeframe, provider, *, history=False, force=Fals
     tf = source_timeframe(provider, timeframe)
     if not (history or force or needs_update(instrument, tf)):
         return 0
+    if not Candle.objects.filter(instrument=instrument, timeframe=tf).exists():
+        history = True  # first download: get enough past data for the long averages
     candles = provider.fetch(instrument, tf, history=history)
     if not candles:
         return 0

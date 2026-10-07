@@ -48,3 +48,20 @@ class PortalTests(TestCase):
         response = self.client.post(reverse("signals:profile_edit", args=[self.profile.pk]), data)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["form"].errors)
+
+
+class EngineTickTests(TestCase):
+    def test_tick_needs_the_key(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        with override_settings(ENGINE_TICK_KEY="secret"), mock.patch("apps.core.views.start_engine",
+                                                                      return_value=True) as start:
+            self.assertEqual(self.client.get("/engine/tick/?key=wrong").status_code, 403)
+            self.assertEqual(self.client.get("/engine/tick/").status_code, 403)
+            response = self.client.get("/engine/tick/?key=secret")
+            self.assertEqual(response.status_code, 200)
+            start.assert_called_once()
+        with override_settings(ENGINE_TICK_KEY=""):
+            self.assertEqual(self.client.get("/engine/tick/?key=").status_code, 403)

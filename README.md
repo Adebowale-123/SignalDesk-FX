@@ -82,12 +82,18 @@ Treat the portal as a measuring tool. Change one setting at a time, re-run the b
 - Fundamental and sentiment data.
 - AI-written explanations.
 
-## Deploying (e.g. Render)
+## Deploying on Render (free)
 
-- Build command: `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_portal`
-- Start command: `gunicorn config.wsgi`
-- Environment variables: `DEBUG=False`, `SECRET_KEY`, `DATABASE_URL` (PostgreSQL).
-- On a free plan with no background worker, set `ENGINE_ON_REQUEST=True`. The analysis then runs, at most once per interval, whenever someone opens the portal. A paid background worker running `python manage.py run_engine` is more reliable.
+1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`, which creates a web service and a PostgreSQL database.
+2. When asked, type **ADMIN_USERNAME** and **ADMIN_PASSWORD**. That becomes your first login.
+3. After it's live, log in. Go to **Backtests → Run backtest** for each strategy you use; this calibrates confidence.
+4. **Keep it running 24/7.** Free services sleep after 15 minutes without visitors, and the analysis stops while it sleeps. To prevent this:
+   - Copy `ENGINE_TICK_KEY` from Render → Environment.
+   - Create a free job at [cron-job.org](https://cron-job.org) that opens `https://<your-app>.onrender.com/engine/tick/?key=<ENGINE_TICK_KEY>` every 5 minutes. This keeps the service awake and runs the analysis.
+
+Notes:
+- Render's free PostgreSQL expires after 30 days unless upgraded.
+- If Yahoo blocks the server, switch to Twelve Data in Settings → Data source. It needs a free key from twelvedata.com.
 
 ## Tests
 
