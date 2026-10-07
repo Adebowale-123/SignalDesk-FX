@@ -10,7 +10,7 @@ Score (0-100), for the direction the higher timeframes point to:
   Entry setup                 20   (pullback to the fast EMA, or breakout of the 20-candle range)
   Market condition            20   (trending ADX, normal volatility, active session)
 Hard "WAIT" rules regardless of score: market closed, outside your sessions, higher timeframes disagree,
-ranging market, no entry setup, overstretched move, volatility spike.
+ranging market, no entry setup, overstretched move, volatility spike, high-impact news due or just out.
 """
 
 from dataclasses import dataclass, field
@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from apps.market.models import TIMEFRAMES
+from apps.news.services import currencies_for
 
 from . import indicators as ind
 
@@ -132,8 +133,29 @@ REQUIRED = ["close", "ema_f", "ema_m", "ema_s", "rsi", "rsi_prev", "hist", "hist
             "entry_trend"]
 
 
-def decide(row, profile, instrument):
-    """Decide for one entry candle. `row` is a mapping of the feature columns."""
+def _calendar(news, when, profile, instrument, blockers):
+    """The economic-calendar reason; adds a blocker when relevant news is too close."""
+    if news is None or not news.covers(when):
+        return _reason("Economic calendar", "Not available for this time — check for news before trading", "neutral")
+    currencies = currencies_for(instrument)
+    medium = profile.news_include_medium
+    event = news.blocking(when, currencies, profile.news_minutes_before, profile.news_minutes_after, medium)
+    if event:
+        due = event["time"] >= when
+        text = f"{event['currency']} {event['title']} at {event['time']:%H:%M} UTC"
+        if profile.news_filter:
+            blockers.insert(0, f"{'high-impact news is due' if due else 'high-impact news just came out'} ({text})")
+        return _reason("Economic calendar", f"{'News due' if due else 'Just released'}: {text}", "bad")
+    upcoming = news.upcoming(when, currencies, hours=24 * 7, include_medium=medium)
+    if upcoming:
+        e = upcoming[0]
+        return _reason("Economic calendar", f"Clear — next: {e['currency']} {e['title']} {e['time']:%a %H:%M} UTC",
+                       "good")
+    return _reason("Economic calendar", "Clear — no major news ahead this week", "good")
+
+
+def decide(row, profile, instrument, news=None):
+    """Decide for one entry candle. `row` is a mapping of the feature columns; `news` a NewsCalendar or None."""
     confirm = profile.clean_confirm()
     close_time = row.get("close_time")
     d = Decision(close_time=close_time)
@@ -272,9 +294,9 @@ def decide(row, profile, instrument):
     if direction and ((bull and rsi > 75) or (not bull and rsi < 25)):
         blockers.append("the move is already stretched (RSI " + f"{rsi:.0f})")
 
+    reasons.append(_calendar(news, close_time, profile, instrument, blockers))
     # Analyses that are not connected yet are shown honestly, never invented.
     reasons.append(_reason("Fundamental", "Not connected yet", "neutral"))
-    reasons.append(_reason("Economic calendar", "Not connected yet — check for news before trading", "neutral"))
 
     d.score = int(min(100, max(0, score)))
     d.reasons = reasons

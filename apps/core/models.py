@@ -22,6 +22,9 @@ class SiteSettings(models.Model):
     telegram_chat_id = models.CharField(max_length=100, blank=True, help_text="Your chat or group ID.")
     alert_emails = models.TextField(blank=True, help_text="One email address per line.")
     alert_on_close = models.BooleanField(default=True, help_text="Also alert when a signal hits TP or SL.")
+    calendar_fetched_at = models.DateTimeField(null=True, blank=True, editable=False)
+    calendar_ok_at = models.DateTimeField(null=True, blank=True, editable=False,
+                                          help_text="Last successful economic calendar download.")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -2,16 +2,16 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import timedelta
 
-import numpy as np
-import pandas as pd
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone as dj_tz
 
 from apps.core.models import SiteSettings
 from apps.market.data import load_frame, update_candles
 from apps.market.providers import ProviderError, get_provider
+from apps.news.services import NewsCalendar, refresh_calendar
 
 from .engine import build_features, confidence_for, decide
 from .models import BacktestRun, PairState, Signal, StrategyProfile
@@ -90,7 +90,7 @@ def update_open_signals(profile, instrument, features):
     return closed
 
 
-def analyse_pair(profile, instrument, provider, run):
+def analyse_pair(profile, instrument, provider, run, news=None):
     """Refresh data, update open signals and store the latest decision. Returns (state, new_signal, closed)."""
     for tf in [profile.entry_timeframe, *profile.clean_confirm()]:
         update_candles(instrument, tf, provider)
@@ -103,7 +103,7 @@ def analyse_pair(profile, instrument, provider, run):
 
     closed = update_open_signals(profile, instrument, features)
     row = _row(features, -1)
-    decision = decide(row, profile, instrument)
+    decision = decide(row, profile, instrument, news)
     confidence, samples = confidence_for(decision.score, run)
 
     new_signal = None
@@ -148,11 +148,13 @@ def run_cycle():
     except ProviderError as exc:
         log.error("Data source not ready: %s", exc)
         return {"error": str(exc)}
+    refresh_calendar()
+    news = NewsCalendar.load()
     for profile in StrategyProfile.objects.filter(is_active=True):
         run = profile.backtests.first()
         for instrument in profile.analysed_instruments():
             try:
-                state, new_signal, closed = analyse_pair(profile, instrument, provider, run)
+                state, new_signal, closed = analyse_pair(profile, instrument, provider, run, news)
             except ProviderError as exc:
                 PairState.objects.update_or_create(profile=profile, instrument=instrument,
                                                    defaults={"error": str(exc)[:255]})
@@ -167,7 +169,22 @@ def run_cycle():
                 summary["closed"] += 1
                 if site.alert_on_close:
                     transaction.on_commit(lambda s=sig: alert_closed(s))
+    if getattr(settings, "AUTO_MAINTENANCE", True):
+        schedule_self_tuning()
     return dict(summary)
+
+
+def schedule_self_tuning():
+    """Start self-tuning in the background for every active strategy that is due (weekly by default)."""
+    from apps.core import background
+
+    from .tuning import tune_profile
+
+    now = dj_tz.now()
+    for profile in StrategyProfile.objects.filter(is_active=True, auto_tune=True):
+        due = profile.last_tuned_at is None or now - profile.last_tuned_at >= timedelta(days=profile.tune_every_days)
+        if due and not background.is_running(f"backtest:{profile.pk}"):
+            background.start(f"tune:{profile.pk}", tune_profile, profile.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -175,81 +192,54 @@ def run_cycle():
 # ---------------------------------------------------------------------------
 
 
+def prepare_features(profile, instrument, provider, *, download=True):
+    """Full-history features for one pair. Returns (features, None) or (None, error message)."""
+    if download:
+        try:
+            for tf in [profile.entry_timeframe, *profile.clean_confirm()]:
+                update_candles(instrument, tf, provider, history=True)
+        except ProviderError as exc:
+            return None, f"Download failed: {exc}"
+    features = load_features(profile, instrument, provider, limit=20000)
+    if features is None or len(features) < 300:
+        return None, "Not enough history"
+    missing = [tf for tf in profile.clean_confirm() if features[f"htf_{tf}"].notna().sum() == 0]
+    if missing:
+        return None, f"No {', '.join(missing)} candles stored"
+    return features, None
+
+
 def backtest(profile, *, download=True, instruments=None):
     """Replay the profile over the stored history. One trade at a time per pair, like the live board."""
-    site = SiteSettings.load()
-    provider = get_provider(site)
-    instruments = list(instruments or profile.analysed_instruments())
-    buckets = defaultdict(lambda: {"wins": 0, "losses": 0, "expired": 0})
-    per_pair = {}
-    results = []
-    start = end = None
-    for instrument in instruments:
-        if download:
-            try:
-                for tf in [profile.entry_timeframe, *profile.clean_confirm()]:
-                    update_candles(instrument, tf, provider, history=True)
-            except ProviderError as exc:
-                per_pair[instrument.symbol] = {"error": f"Download failed: {exc}"}
-                continue
-        features = load_features(profile, instrument, provider, limit=20000)
-        if features is None or len(features) < 300:
-            per_pair[instrument.symbol] = {"error": "Not enough history"}
-            continue
-        missing = [tf for tf in profile.clean_confirm() if features[f"htf_{tf}"].notna().sum() == 0]
-        if missing:
-            per_pair[instrument.symbol] = {"error": f"No {', '.join(missing)} candles stored"}
-            continue
-        start = min(start, features.index[0]) if start else features.index[0]
-        end = max(end, features.index[-1]) if end else features.index[-1]
-        highs, lows, closes = features["high"].to_numpy(), features["low"].to_numpy(), features["close"].to_numpy()
-        times = features.index
-        stats = {"trades": 0, "wins": 0, "losses": 0, "expired": 0, "total_r": 0.0, "pips": 0.0}
-        i, n = 0, len(features)
-        while i < n - 1:
-            d = decide(_row(features, i), profile, instrument)
-            if not d.is_trade:
-                i += 1
-                continue
-            bars = zip(times[i + 1:], highs[i + 1:], lows[i + 1:], closes[i + 1:])
-            status, price, _, used = evaluate_outcome(d.direction, d.entry, d.stop_loss, d.take_profit, bars,
-                                                      profile.max_hold_bars)
-            if status is None:  # still running at the end of the data
-                break
-            # Charge the typical spread on every trade so results match what a trader would get.
-            spread = float(instrument.spread_pips) * float(instrument.pip_size)
-            risk = abs(d.entry - d.stop_loss)
-            r = float(result_in_r(d.direction, d.entry, d.stop_loss, price)) - (spread / risk if risk else 0)
-            move = (price - d.entry if d.direction == "buy" else d.entry - price) - spread
-            key = d.score // 10 * 10
-            outcome = {"tp": "wins", "sl": "losses", "expired": "expired"}[status]
-            buckets[key][outcome] += 1
-            stats[outcome] += 1
-            stats["trades"] += 1
-            stats["total_r"] += r
-            stats["pips"] += move / float(instrument.pip_size)
-            results.append(r)
-            i += used + 1
-        decided = stats["wins"] + stats["losses"]
-        stats["win_rate"] = round(100 * stats["wins"] / decided, 1) if decided else None
-        stats["total_r"] = round(float(stats["total_r"]), 2)
-        stats["pips"] = round(float(stats["pips"]), 1)
-        per_pair[instrument.symbol] = stats
+    from .tuning import buckets_of, scan, simulate, summarise
 
-    wins = sum(b["wins"] for b in buckets.values())
-    losses = sum(b["losses"] for b in buckets.values())
-    expired = sum(b["expired"] for b in buckets.values())
-    gains = sum(r for r in results if r > 0)
-    pains = -sum(r for r in results if r < 0)
+    provider = get_provider(SiteSettings.load())
+    news = NewsCalendar.load()
+    params = profile.tuned_params()
+    per_pair, trades = {}, []
+    start = end = None
+    for instrument in list(instruments or profile.analysed_instruments()):
+        features, error = prepare_features(profile, instrument, provider, download=download)
+        if error:
+            per_pair[instrument.symbol] = {"error": error}
+            continue
+        start = min(start, features.index[0]) if start is not None else features.index[0]
+        end = max(end, features.index[-1]) if end is not None else features.index[-1]
+        pair_trades = simulate(scan(features, profile, instrument, news), params, profile.max_hold_bars)
+        stats = summarise(pair_trades)
+        per_pair[instrument.symbol] = {
+            "trades": stats["trades"], "wins": stats["wins"], "losses": stats["losses"], "expired": stats["expired"],
+            "total_r": round(stats["total_r"], 2), "pips": round(sum(t["pips"] for t in pair_trades), 1),
+            "win_rate": stats["win_rate"]}
+        trades += pair_trades
+
+    stats = summarise(trades)
     return BacktestRun.objects.create(
         profile=profile,
         period_start=start.to_pydatetime() if start is not None else None,
         period_end=end.to_pydatetime() if end is not None else None,
-        trades=len(results), wins=wins, losses=losses, expired=expired,
-        win_rate=round(100 * wins / (wins + losses), 1) if wins + losses else None,
-        avg_r=round(float(np.mean(results)), 2) if results else None,
-        profit_factor=round(gains / pains, 2) if pains else None,
-        total_r=round(sum(results), 2),
-        buckets={str(k): v for k, v in sorted(buckets.items())},
-        per_pair=per_pair,
+        trades=stats["trades"], wins=stats["wins"], losses=stats["losses"], expired=stats["expired"],
+        win_rate=stats["win_rate"], avg_r=round(stats["avg_r"], 2) if stats["avg_r"] is not None else None,
+        profit_factor=stats["profit_factor"], total_r=stats["total_r"],
+        buckets=buckets_of(trades), per_pair=per_pair,
     )

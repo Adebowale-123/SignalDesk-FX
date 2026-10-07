@@ -12,11 +12,13 @@ from apps.core import background
 from apps.core.models import SiteSettings
 from apps.market.models import Candle, Instrument
 from apps.market.providers import ProviderError, get_provider
+from apps.news.services import NewsCalendar, currencies_for
 
 from .engine import SESSION_NAMES, SESSIONS_UTC, active_sessions, market_open
 from .forms import ProfileForm, SiteSettingsForm
-from .models import BacktestRun, PairState, Signal, StrategyProfile
+from .models import BacktestRun, PairState, Signal, StrategyProfile, TuningRun
 from .services import backtest, load_features, run_cycle
+from .tuning import tune_profile
 
 
 def _profile(request):
@@ -49,7 +51,24 @@ def board(request):
         "profile": profile, "profiles": profiles, "rows": rows, "last_run": last_run,
         "sessions": sessions, "market_open": is_open, "site": SiteSettings.load(),
         "calibrated": bool(profile and profile.backtests.exists()),
+        "tuning": profile.latest_tuning if profile else None,
+        "news": _upcoming_news(profile, [r["instrument"] for r in rows]),
     })
+
+
+def _upcoming_news(profile, instruments, hours=24):
+    """Relevant scheduled news in the next day for the pairs on the board."""
+    if not profile:
+        return []
+    currencies = sorted({c for i in instruments for c in currencies_for(i)})
+    now = datetime.now(timezone.utc)
+    events = NewsCalendar.load().upcoming(now - timedelta(minutes=profile.news_minutes_after), currencies,
+                                          hours=hours, include_medium=profile.news_include_medium)
+    window = timedelta(minutes=profile.news_minutes_before)
+    for e in events:
+        e["blocking"] = profile.news_filter and e["time"] - window <= now <= e["time"] + timedelta(
+            minutes=profile.news_minutes_after)
+    return events
 
 
 def pair_detail(request, profile_id, slug):
@@ -113,17 +132,52 @@ def backtests(request):
     profile, profiles = _profile(request)
     runs = BacktestRun.objects.filter(profile=profile)[:10] if profile else []
     breakeven = round(100 / (1 + float(profile.risk_reward))) if profile else None
+    tunings = list(profile.tunings.all()[:6]) if profile else []
     return render(request, "signals/backtests.html", {
         "profile": profile, "profiles": profiles, "runs": runs, "latest": runs[0] if runs else None,
         "breakeven": breakeven, "running": bool(profile and background.is_running(f"backtest:{profile.pk}")),
+        "tuning_running": bool(profile and background.is_running(f"tune:{profile.pk}")),
+        "tuning": tunings[0] if tunings else None, "older_tunings": tunings[1:],
+        "next_tune": (profile.last_tuned_at + timedelta(days=profile.tune_every_days))
+        if profile and profile.auto_tune and profile.last_tuned_at else None,
     })
+
+
+@staff_member_required
+@require_POST
+def tune_now(request, profile_id):
+    profile = get_object_or_404(StrategyProfile, pk=profile_id)
+    if background.is_running(f"backtest:{profile.pk}"):
+        messages.info(request, "A backtest is running for this strategy. Try again when it has finished.")
+    elif background.start(f"tune:{profile.pk}", tune_profile, profile.pk):
+        messages.success(request, "Self-tuning started. It tests about 1,000 variations and takes a few minutes; "
+                                  "this page refreshes until it's done.")
+    else:
+        messages.info(request, "Self-tuning is already running for this strategy.")
+    return redirect(f"/backtests/?profile={profile.pk}")
+
+
+@staff_member_required
+@require_POST
+def undo_tuning(request, pk):
+    run = get_object_or_404(TuningRun, pk=pk, outcome=TuningRun.Outcome.ADOPTED, reverted=False)
+    profile = run.profile
+    profile.apply_params(run.previous_params)
+    profile.save()
+    run.reverted = True
+    run.save(update_fields=["reverted"])
+    background.start(f"backtest:{profile.pk}", backtest, profile, download=False)
+    messages.success(request, "Previous settings restored. Confidence is being recalibrated in the background.")
+    return redirect(f"/backtests/?profile={profile.pk}")
 
 
 @staff_member_required
 @require_POST
 def run_backtest(request, profile_id):
     profile = get_object_or_404(StrategyProfile, pk=profile_id)
-    if background.start(f"backtest:{profile.pk}", backtest, profile):
+    if background.is_running(f"tune:{profile.pk}"):
+        messages.info(request, "Self-tuning is running for this strategy and will run a backtest when it finishes.")
+    elif background.start(f"backtest:{profile.pk}", backtest, profile):
         messages.success(request, "Backtest started. It takes about 1–5 minutes; this page refreshes until it's done.")
     else:
         messages.info(request, "A backtest for this strategy is already running.")

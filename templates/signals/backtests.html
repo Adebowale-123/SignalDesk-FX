@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Backtests{% endblock %}
-{% block head %}{% if running %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+{% block head %}{% if running or tuning_running %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
 {% block content %}
 <div class="row between">
   <div>
@@ -19,7 +19,55 @@
 <div class="tabs" style="margin:6px 0 14px">{% for p in profiles %}<a href="?profile={{ p.pk }}" class="{% if p == profile %}active{% endif %}">{{ p.name }}</a>{% endfor %}</div>
 {% endif %}
 
+{% if profile %}
+<section class="card" style="margin-bottom:16px">
+  <div class="row between">
+    <div><h2 class="mb-0">Self-tuning</h2>
+      <p class="muted" style="font-size:14px;margin:4px 0 0">{% if profile.auto_tune %}Automatic: every {{ profile.tune_every_days }} day{{ profile.tune_every_days|pluralize }}{% if next_tune %}, next around {{ next_tune|date:"j M H:i" }}{% endif %}.{% else %}Switched off for this strategy (Settings → edit strategy).{% endif %}
+      Tests ~1,000 variations on older data and adopts one only if it also wins on newer, unseen data.</p></div>
+    {% if tuning_running %}<span class="chip on"><span class="dot"></span>Self-tuning running… this page refreshes itself</span>
+    {% elif user.is_staff %}<form method="post" action="{% url 'signals:tune_now' profile.pk %}" data-busy="Starting…">{% csrf_token %}<button class="btn btn-sm" type="submit">⟳ Tune now</button></form>{% endif %}
+  </div>
+  {% if tuning %}
+  <div style="margin-top:14px">
+    <div class="row" style="gap:10px;align-items:center">
+      {% if tuning.outcome == "adopted" %}<span class="chip on"><span class="dot"></span>{% if tuning.reverted %}Adopted, then undone{% else %}New settings adopted{% endif %}</span>
+      {% elif tuning.outcome == "failed" %}<span class="chip">Could not run</span>
+      {% elif tuning.has_edge %}<span class="chip on"><span class="dot"></span>Current settings confirmed</span>
+      {% else %}<span class="chip" style="color:var(--sell)">No proven edge</span>{% endif %}
+      <span class="faint" style="font-size:13px">{{ tuning.started_at|date:"j M Y H:i" }} · {{ tuning.variations }} variations tested</span>
+    </div>
+    <p style="margin:10px 0">{{ tuning.message }}</p>
+    {% if tuning.outcome == "adopted" and tuning.changes %}
+    <div class="table-wrap" style="box-shadow:none;max-width:560px"><table>
+      <thead><tr><th>Setting</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>{% for label, old, new in tuning.changes %}<tr><td>{{ label }}</td><td class="muted">{{ old }}</td><td><b>{{ new }}</b></td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if not tuning.reverted and user.is_staff %}<form method="post" action="{% url 'signals:undo_tuning' tuning.pk %}" style="margin-top:10px" onsubmit="return confirm('Restore the previous settings?')">{% csrf_token %}<button class="btn btn-sm" type="submit">↶ Undo this change</button></form>{% endif %}
+    {% endif %}
+    {% if tuning.current_test.trades is not None %}
+    <div class="table-wrap" style="box-shadow:none;margin-top:12px"><table>
+      <thead><tr><th>On unseen data ({{ tuning.test_start|date:"j M" }} – {{ tuning.test_end|date:"j M Y" }})</th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">Avg R</th><th class="num">Profit factor</th><th class="num">Total R</th></tr></thead>
+      <tbody>
+        <tr><td>{% if tuning.outcome == "adopted" %}Old settings{% else %}Settings in use{% endif %}</td><td class="num">{{ tuning.current_test.trades }}</td><td class="num">{{ tuning.current_test.win_rate|default_if_none:"—" }}%</td><td class="num">{{ tuning.current_test.avg_r|default_if_none:"—" }}</td><td class="num">{{ tuning.current_test.profit_factor|default_if_none:"—" }}</td><td class="num mono {% if tuning.current_test.total_r > 0 %}pos{% else %}neg{% endif %}">{{ tuning.current_test.total_r }}</td></tr>
+        {% if tuning.best_test.trades is not None %}<tr><td>Best variation</td><td class="num">{{ tuning.best_test.trades }}</td><td class="num">{{ tuning.best_test.win_rate|default_if_none:"—" }}%</td><td class="num">{{ tuning.best_test.avg_r|default_if_none:"—" }}</td><td class="num">{{ tuning.best_test.profit_factor|default_if_none:"—" }}</td><td class="num mono {% if tuning.best_test.total_r > 0 %}pos{% else %}neg{% endif %}">{{ tuning.best_test.total_r }}</td></tr>{% endif %}
+      </tbody>
+    </table></div>
+    {% endif %}
+  </div>
+  {% if older_tunings %}
+  <details style="margin-top:12px"><summary style="cursor:pointer" class="muted">Earlier self-tests</summary>
+    <ul class="muted" style="margin:8px 0 0;padding-left:18px;font-size:14px">{% for t in older_tunings %}<li>{{ t.started_at|date:"j M Y" }}: {{ t.get_outcome_display }}{% if t.reverted %} (undone){% endif %}{% if t.outcome != "failed" %}, {% if t.has_edge %}edge confirmed{% else %}no proven edge{% endif %}{% endif %}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% else %}
+  <p class="faint" style="margin:12px 0 0">No self-test yet. {% if profile.auto_tune and profile.is_active %}The first one starts automatically with the next analysis.{% endif %}</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if latest %}
+<h2>Latest backtest</h2>
 <div class="grid grid-4" style="margin-bottom:16px">
   <div class="card kpi"><div class="label">Trades</div><div class="value">{{ latest.trades }}</div></div>
   <div class="card kpi"><div class="label">Win rate</div><div class="value">{{ latest.win_rate|default_if_none:"—" }}{% if latest.win_rate is not None %}%{% endif %}</div></div>

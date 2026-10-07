@@ -27,13 +27,18 @@ class ProfileForm(forms.ModelForm):
         model = StrategyProfile
         fields = ["name", "is_active", "entry_timeframe", "confirm_timeframes", "require_all_confirm", "instruments",
                   "sessions", "risk_reward", "sl_method", "atr_multiplier", "min_score", "alert_min_confidence",
-                  "adx_threshold", "ema_fast", "ema_mid", "ema_slow", "rsi_length", "max_hold_bars"]
+                  "adx_threshold", "ema_fast", "ema_mid", "ema_slow", "rsi_length", "max_hold_bars",
+                  "news_filter", "news_minutes_before", "news_minutes_after", "news_include_medium",
+                  "auto_tune", "tune_every_days"]
         labels = {"is_active": "Active", "entry_timeframe": "Entry timeframe", "require_all_confirm": "All must agree",
                   "risk_reward": "Risk : reward (TP = this × SL)", "sl_method": "Stop loss placement",
                   "atr_multiplier": "ATR multiplier", "min_score": "Minimum setup score",
                   "alert_min_confidence": "Alert at confidence of at least (%)", "adx_threshold": "ADX trend threshold",
                   "ema_fast": "Fast EMA", "ema_mid": "Middle EMA", "ema_slow": "Slow EMA", "rsi_length": "RSI length",
-                  "max_hold_bars": "Expire after (entry candles)"}
+                  "max_hold_bars": "Expire after (entry candles)", "news_filter": "Avoid high-impact news",
+                  "news_minutes_before": "Minutes before news", "news_minutes_after": "Minutes after news",
+                  "news_include_medium": "Also avoid medium-impact news", "auto_tune": "Self-tuning",
+                  "tune_every_days": "Re-test every (days)"}
 
     def clean(self):
         data = super().clean()
@@ -47,6 +52,8 @@ class ProfileForm(forms.ModelForm):
         if data.get("ema_fast") and data.get("ema_mid") and data.get("ema_slow"):
             if not data["ema_fast"] < data["ema_mid"] < data["ema_slow"]:
                 self.add_error("ema_mid", "EMAs must go fast < middle < slow.")
+        if data.get("tune_every_days") is not None and data["tune_every_days"] < 1:
+            self.add_error("tune_every_days", "At least 1 day.")
         rr = data.get("risk_reward")
         if rr is not None and rr <= 0:
             self.add_error("risk_reward", "Must be above 0.")

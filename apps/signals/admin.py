@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BacktestRun, PairState, Signal, StrategyProfile
+from .models import TuningRun, BacktestRun, PairState, Signal, StrategyProfile
 
 
 @admin.register(StrategyProfile)
@@ -23,3 +23,9 @@ class PairStateAdmin(admin.ModelAdmin):
 @admin.register(BacktestRun)
 class BacktestRunAdmin(admin.ModelAdmin):
     list_display = ("started_at", "profile", "trades", "win_rate", "avg_r", "profit_factor")
+
+
+@admin.register(TuningRun)
+class TuningRunAdmin(admin.ModelAdmin):
+    list_display = ("profile", "started_at", "outcome", "has_edge", "variations", "reverted")
+    list_filter = ("outcome", "has_edge", "profile")

@@ -25,6 +25,7 @@ It doesn't place trades or connect to a broker, and it holds no money. It only s
 5. **Shows confidence from real past results.** Confidence is the percentage of similar-scoring setups that reached take profit before stop loss in the latest backtest. Until a backtest has run, the board shows the score instead.
 6. **Tracks every signal** to TP, SL or expiry (Track record page).
 7. **Sends alerts** by Telegram and/or email.
+8. **Avoids news and re-tests itself automatically** (see below).
 
 ## Quick start (Windows)
 
@@ -76,11 +77,27 @@ The default rules are textbook trend-following, and in testing on Yahoo data the
 
 Treat the portal as a measuring tool. Change one setting at a time, re-run the backtest, and only trust a strategy that keeps a profit factor above about 1.2 over many trades.
 
-## Not connected yet (phase 2)
+## Automatic news filter
 
-- Economic calendar (block signals around high-impact news). Until then, check the calendar yourself before trading.
-- Fundamental and sentiment data.
-- AI-written explanations.
+- Every hour the portal downloads the free ForexFactory economic calendar.
+- A pair says **WAIT** from 30 minutes before to 30 minutes after high-impact news for either of its currencies. Gold follows USD news.
+- The window, and whether medium-impact news also counts, are set per strategy.
+- The board lists the next 24 hours of relevant news.
+
+## Self-tuning (automatic)
+
+Once a week (configurable per strategy), each active strategy re-tests itself:
+
+1. It downloads fresh history and replays about 1,000 variations of its settings: minimum score, risk : reward, stop loss method, ADX threshold and sessions.
+2. It picks the variation that did best on the **older 70%** of the data.
+3. It adopts that variation **only if** it is also profitable on the **newest 30%**, which played no part in choosing it. That means at least 20 trades, profit factor of at least 1.1, and a better result than the current settings. Otherwise it keeps the current settings, and if those don't pass either, the board warns that there's **no proven edge**.
+4. Confidence is recalibrated with a fresh backtest.
+
+Every self-test is logged on the Backtests page, with before/after settings and an **Undo** button. **Tune now** runs one on demand.
+
+Self-tuning only adjusts those settings within fixed rules. It can't invent new strategies, and a strategy that passes is still not guaranteed to keep working. Trust it only after it also holds up on the Track record page.
+
+Still not connected: fundamental and sentiment data, and AI-written explanations.
 
 ## Deploying on Render (free)
 

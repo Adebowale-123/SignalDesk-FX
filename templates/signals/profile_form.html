@@ -35,6 +35,24 @@
       {% include "signals/_field.html" with field=form.max_hold_bars %}
     </div>
   </fieldset>
+  <fieldset>
+    <legend>News</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.news_filter %}
+      {% include "signals/_field.html" with field=form.news_include_medium %}
+      {% include "signals/_field.html" with field=form.news_minutes_before %}
+      {% include "signals/_field.html" with field=form.news_minutes_after %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">The economic calendar is downloaded automatically every hour. A pair says WAIT in this window around news for either of its currencies (gold follows USD news).</p>
+  </fieldset>
+  <fieldset>
+    <legend>Self-tuning</legend>
+    <div class="form-grid">
+      {% include "signals/_field.html" with field=form.auto_tune %}
+      {% include "signals/_field.html" with field=form.tune_every_days %}
+    </div>
+    <p class="faint" style="font-size:13px;margin:12px 0 0">The system tests about 1,000 variations of the minimum score, risk : reward, stop loss method, ADX threshold and sessions. It picks the best on older data and adopts it only if it is also profitable on the most recent data it has not seen. Every change is logged on the Backtests page and can be undone.</p>
+  </fieldset>
   <details>
     <summary style="cursor:pointer;font-weight:700;margin-bottom:10px">Indicator settings (advanced)</summary>
     <fieldset>

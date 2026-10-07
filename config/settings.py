@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "apps.market",
     "apps.signals",
     "apps.alerts",
+    "apps.news",
 ]
 
 MIDDLEWARE = [
@@ -138,6 +139,8 @@ ENGINE_TICK_KEY = env("ENGINE_TICK_KEY", "")
 TESTING = len(os.sys.argv) > 1 and os.sys.argv[1] == "test"
 if TESTING:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+# Start self-tuning automatically after analysis cycles (off in tests).
+AUTO_MAINTENANCE = not TESTING
 
 LOGGING = {
     "version": 1,
