@@ -120,9 +120,9 @@ That's about 15,500 combinations. A new strategy is created **only if** the best
 
 Still not connected: AI-written explanations.
 
-## Auto-trading (OANDA)
+## Auto-trading (MetaTrader 5 or OANDA)
 
-When switched on, every fresh TRADE NOW signal is traded on your OANDA account:
+When switched on, every fresh TRADE NOW signal is traded on your broker account:
 
 1. **Checks run first.** It skips a signal (and records why) if:
    - the pair already has an open trade, or the maximum number of open trades is reached;
@@ -131,7 +131,7 @@ When switched on, every fresh TRADE NOW signal is traded on your OANDA account:
    - confidence is below your minimum;
    - a daily or weekly loss limit has paused trading.
 2. **The position is sized** so that hitting the stop loss loses about your **risk %** (default 1%).
-3. **A market order is placed with the stop loss and take profit attached at OANDA.** They work even if this server is down.
+3. **A market order is placed with the stop loss and take profit attached at the broker.** They work even if this server is down.
 4. **Trades close at take profit or stop loss by themselves.** If its signal expires first, it is closed at market (like the backtest). Then the system waits for the next signal.
 5. **Telegram/email messages** go out for every trade opened, closed, rejected or paused.
 
@@ -146,6 +146,24 @@ When switched on, every fresh TRADE NOW signal is traded on your OANDA account:
 1. Open an OANDA demo account and generate an API token (OANDA → Manage API Access).
 2. Go to Settings → Data source: choose OANDA, paste the token, account type **Practice**.
 3. Go to Auto-trading → **Test connection** (it finds your account ID) → review the risk rules → **Switch ON**.
+
+### MetaTrader 5 brokers (FXTM, Exness, HFM…)
+
+MT5 can only be automated on Windows, so a small **bridge** program (`bridge/signaldesk_bridge.py`) runs on a Windows computer with MT5 open:
+
+- Every 20 seconds it checks in with SignalDesk (`POST /api/bridge/`, authenticated with a secret bridge key).
+- It places the orders it receives, closes trades it's told to close, and reports account, positions and closed deals.
+- All decisions and risk rules stay in SignalDesk.
+- Stops and targets are sent as **distances**, which the bridge applies to its own fill price. Small differences between data feeds (e.g. gold futures vs spot) therefore don't change the risk.
+- Orders carry a unique comment, so the same signal is never placed twice, even after a restart.
+
+**Setup:**
+1. Install MT5 from your broker, log in to a demo account and switch on **Algo Trading**.
+2. Install Python for Windows (tick "Add python.exe to PATH").
+3. On the Auto-trading page, choose **MetaTrader 5**, click **Download bridge** and double-click the file. It shows **Online**.
+4. Click **Switch ON**.
+
+The computer must stay on (or use a Windows VPS). Stop losses and take profits stay at the broker either way.
 
 ## Deploying on Render (free)
 

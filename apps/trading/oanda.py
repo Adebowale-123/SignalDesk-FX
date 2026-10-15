@@ -134,6 +134,6 @@ class OandaBroker:
 
 def client_id(signal):
     """The same for the same signal on any copy of the portal, so OANDA refuses a second order for it."""
-    strategy = "".join(ch for ch in signal.profile.name.lower() if ch.isalnum())[:24]
+    strategy = "".join(ch for ch in signal.profile.name.lower() if ch.isalnum())[:8]  # MT5 comments: 31 chars max
     return f"sd-{signal.instrument.slug}-{strategy}-{int(signal.candle_time.timestamp())}"
 

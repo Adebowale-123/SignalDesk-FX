@@ -1,3 +1,5 @@
+import secrets
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import models
@@ -6,7 +8,16 @@ from django.db import models
 class AutoTrader(models.Model):
     """Settings and state of automatic trading through OANDA (one row)."""
 
+    class Broker(models.TextChoices):
+        MT5 = "mt5", "MetaTrader 5 (FXTM, Exness, HFM…) through the SignalDesk bridge"
+        OANDA = "oanda", "OANDA (direct)"
+
     enabled = models.BooleanField(default=False, help_text="Master switch. Off = no new trades are opened.")
+    broker_type = models.CharField(max_length=10, choices=Broker.choices, default=Broker.MT5)
+    bridge_key = models.CharField(max_length=64, blank=True, editable=False)
+    bridge_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
+    bridge_info = models.JSONField(default=dict, blank=True, editable=False)
+    close_all_requested = models.BooleanField(default=False, editable=False)
     account_id = models.CharField(max_length=40, blank=True, help_text='OANDA account ID, e.g. "101-004-1234567-001".')
     allow_live = models.BooleanField(
         default=False, help_text="Required before trading a LIVE (real money) OANDA account.")
@@ -54,7 +65,20 @@ class AutoTrader(models.Model):
     @classmethod
     def load(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
+        if not obj.bridge_key:
+            obj.bridge_key = secrets.token_urlsafe(32)
+            obj.save(update_fields=["bridge_key"])
         return obj
+
+    @property
+    def bridge_online(self):
+        from django.utils import timezone
+
+        return bool(self.bridge_seen_at and timezone.now() - self.bridge_seen_at < timedelta(minutes=2))
+
+    @property
+    def bridge_account_is_real(self):
+        return self.bridge_info.get("mode") == "real"
 
     def traded_profiles(self):
         from apps.signals.models import StrategyProfile
@@ -80,6 +104,10 @@ class BrokerTrade(models.Model):
     direction = models.CharField(max_length=4)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     units = models.IntegerField(default=0)
+    lots = models.FloatField(null=True, blank=True, help_text="MT5 volume in lots.")
+    client_id = models.CharField(max_length=40, blank=True, db_index=True,
+                                 help_text="Order comment / client ID, the same on every copy of the portal.")
+    issued_at = models.DateTimeField(null=True, blank=True, help_text="When the order was handed to the bridge.")
     requested_price = models.FloatField(null=True, blank=True)
     fill_price = models.FloatField(null=True, blank=True)
     stop_loss = models.FloatField(null=True, blank=True)

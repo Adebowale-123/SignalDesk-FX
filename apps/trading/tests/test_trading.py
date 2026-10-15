@@ -77,6 +77,7 @@ class TradingTestCase(TestCase):
         SiteSettings.objects.update_or_create(pk=1, defaults={"data_provider": "oanda", "oanda_api_token": "tok"})
         self.trader = AutoTrader.load()
         self.trader.account_id, self.trader.enabled = "101-004-1-001", True
+        self.trader.broker_type = AutoTrader.Broker.OANDA
         self.trader.save()
         self.eur = Instrument.objects.create(symbol="EUR/USD", pip_size=0.0001, decimals=5)
         self.gbp = Instrument.objects.create(symbol="GBP/USD", pip_size=0.0001, decimals=5)

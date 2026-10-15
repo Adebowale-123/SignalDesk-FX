@@ -13,13 +13,13 @@ class AutoTraderForm(forms.ModelForm):
 
     class Meta:
         model = AutoTrader
-        fields = ["account_id", "strategies", "risk_percent", "max_open_trades", "daily_loss_limit",
+        fields = ["broker_type", "account_id", "strategies", "risk_percent", "max_open_trades", "daily_loss_limit",
                   "weekly_loss_limit", "max_slippage_r", "min_confidence", "close_on_expiry", "allow_live"]
-        labels = {"account_id": "OANDA account ID", "risk_percent": "Risk per trade (%)",
+        labels = {"broker_type": "Broker connection", "account_id": "OANDA account ID", "risk_percent": "Risk per trade (%)",
                   "max_open_trades": "Maximum open trades", "daily_loss_limit": "Daily loss limit (%)",
                   "weekly_loss_limit": "Weekly loss limit (%)", "max_slippage_r": "Too late to enter after (× risk)",
                   "min_confidence": "Minimum confidence (%)", "close_on_expiry": "Close trades when the signal expires",
-                  "allow_live": "Allow trading a LIVE (real money) account"}
+                  "allow_live": "Allow trading a LIVE / REAL (real money) account"}
 
     def clean(self):
         data = super().clean()

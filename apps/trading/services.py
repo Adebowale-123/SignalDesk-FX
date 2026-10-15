@@ -52,8 +52,11 @@ def _notify(subject, lines):
 
 
 def refresh_account(trader, broker, now):
-    """Store balance/NAV; reset day and week start values; halt when a loss limit is hit."""
-    s = broker.summary()
+    return apply_account(trader, broker.summary(), now)
+
+
+def apply_account(trader, s, now):
+    """Store balance/NAV (equity); reset day and week start values; halt when a loss limit is hit."""
     trader.account_currency, trader.balance, trader.nav = s["currency"], s["balance"], s["nav"]
     today = now.date()
     monday = today - timedelta(days=today.weekday())
@@ -270,6 +273,8 @@ def trade_cycle(now=None):
     trader = AutoTrader.load()
     site = SiteSettings.load()
     now = now or dj_tz.now()
+    if trader.broker_type != AutoTrader.Broker.OANDA:
+        return {"status": "bridge"}  # MT5: the bridge collects orders itself (apps.trading.bridge)
     if not trader.account_id or not site.oanda_api_token:
         return {"status": "not set up"}
     if site.data_provider != "oanda":
@@ -308,6 +313,10 @@ def trade_cycle(now=None):
 def close_all(reason="Closed from the dashboard"):
     """Kill switch: close every open trade the auto-trader opened."""
     trader = AutoTrader.load()
+    if trader.broker_type != AutoTrader.Broker.OANDA:
+        trader.close_all_requested = True  # the bridge closes them on its next check-in
+        trader.save(update_fields=["close_all_requested"])
+        return BrokerTrade.objects.filter(status=BrokerTrade.Status.OPEN).count(), []
     broker = get_broker(trader)
     closed, errors = 0, []
     for bt in BrokerTrade.objects.filter(status=BrokerTrade.Status.OPEN):
