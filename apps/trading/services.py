@@ -273,6 +273,8 @@ def trade_cycle(now=None):
     trader = AutoTrader.load()
     site = SiteSettings.load()
     now = now or dj_tz.now()
+    if trader.broker_type == AutoTrader.Broker.CAPITAL:
+        return _run_capital(trader, now)
     if trader.broker_type != AutoTrader.Broker.OANDA:
         return {"status": "bridge"}  # MT5: the bridge collects orders itself (apps.trading.bridge)
     if not trader.account_id or not site.oanda_api_token:
@@ -310,9 +312,28 @@ def trade_cycle(now=None):
     return summary
 
 
+def _run_capital(trader, now):
+    from .capital import BrokerError as CapitalError
+    from .capital_trader import capital_cycle
+
+    try:
+        summary = capital_cycle(trader, now)
+    except CapitalError as exc:
+        trader.last_error = str(exc)[:255]
+        log.warning("Auto-trading (Capital.com): %s", exc)
+        summary = {"status": "error"}
+    trader.last_sync_at = now
+    trader.save()
+    return summary
+
+
 def close_all(reason="Closed from the dashboard"):
     """Kill switch: close every open trade the auto-trader opened."""
     trader = AutoTrader.load()
+    if trader.broker_type == AutoTrader.Broker.CAPITAL:
+        from .capital_trader import capital_close_all
+
+        return capital_close_all(trader, reason)
     if trader.broker_type != AutoTrader.Broker.OANDA:
         trader.close_all_requested = True  # the bridge closes them on its next check-in
         trader.save(update_fields=["close_all_requested"])

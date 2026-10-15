@@ -23,6 +23,16 @@ from .services import close_all, get_broker
 def _readiness(trader, site):
     """What still needs doing before auto-trading can run, in order."""
     steps = []
+    if trader.broker_type == AutoTrader.Broker.CAPITAL:
+        if not (trader.capital_identifier and trader.capital_api_key and trader.capital_password):
+            steps.append("Enter your Capital.com login email, API key and API key password below, then Save and "
+                         "press Test connection.")
+        elif trader.balance is None:
+            steps.append("Press Test connection to check the Capital.com login.")
+        if trader.capital_environment == "live" and not trader.allow_live:
+            steps.append("Capital.com LIVE is selected: tick “Allow trading a LIVE / REAL account” to permit real "
+                         "money, or choose Demo.")
+        return steps
     if trader.broker_type == AutoTrader.Broker.MT5:
         if not trader.bridge_online:
             steps.append("Start the bridge on your Windows computer with MetaTrader 5 open and logged in "
@@ -44,6 +54,14 @@ def _readiness(trader, site):
     return steps
 
 
+def _is_live(trader, site):
+    if trader.broker_type == AutoTrader.Broker.CAPITAL:
+        return trader.capital_environment == "live"
+    if trader.broker_type == AutoTrader.Broker.MT5:
+        return trader.bridge_account_is_real
+    return site.oanda_environment == "live"
+
+
 @staff_member_required
 def dashboard(request):
     trader = AutoTrader.load()
@@ -60,8 +78,7 @@ def dashboard(request):
         "trader": trader, "site": site, "form": form, "trades": trades, "stats": stats,
         "open_trades": BrokerTrade.objects.filter(status=BrokerTrade.Status.OPEN).select_related("instrument"),
         "steps": _readiness(trader, site), "mt5": trader.broker_type == AutoTrader.Broker.MT5,
-        "live": trader.bridge_account_is_real if trader.broker_type == AutoTrader.Broker.MT5
-        else site.oanda_environment == "live",
+        "capital": trader.broker_type == AutoTrader.Broker.CAPITAL, "live": _is_live(trader, site),
     })
 
 
@@ -77,8 +94,7 @@ def switch(request):
     trader.enabled = turning_on
     trader.save(update_fields=["enabled"])
     if turning_on:
-        real = trader.bridge_account_is_real if trader.broker_type == AutoTrader.Broker.MT5 else \
-            site.oanda_environment == "live"
+        real = _is_live(trader, site)
         messages.success(request, f"Auto-trading is ON ({'REAL MONEY' if real else 'demo'} account). New TRADE NOW "
                                   "signals will be traded automatically.")
     else:
@@ -92,6 +108,8 @@ def switch(request):
 def test_connection(request):
     trader = AutoTrader.load()
     site = SiteSettings.load()
+    if trader.broker_type == AutoTrader.Broker.CAPITAL:
+        return _test_capital(request, trader)
     try:
         broker = get_broker(trader, site)
         if not trader.account_id:
@@ -184,4 +202,31 @@ def new_bridge_key(request):
     trader.bridge_key = secrets.token_urlsafe(32)
     trader.save(update_fields=["bridge_key"])
     messages.success(request, "New bridge key made. The old bridge file stops working: download it again.")
+    return redirect("trading:dashboard")
+
+
+def _test_capital(request, trader):
+    from .capital import BrokerError as CapitalError
+    from .capital import epic_for
+    from .capital_trader import get_capital
+
+    try:
+        broker = get_capital(trader)
+        s = broker.summary()
+        markets = []
+        for instrument in trader.traded_instruments():
+            try:
+                m = broker.market(epic_for(instrument))
+                markets.append(f"{instrument} ✓ (min size {m['min_size']:g})")
+            except CapitalError:
+                markets.append(f"{instrument} ✗ not found")
+    except CapitalError as exc:
+        messages.error(request, f"Connection failed: {exc}")
+        return redirect("trading:dashboard")
+    trader.account_currency, trader.balance, trader.nav = s["currency"], s["balance"], s["nav"]
+    trader.last_error = ""
+    trader.save(update_fields=["account_currency", "balance", "nav", "last_error"])
+    messages.success(request, f"Connected to Capital.com {trader.capital_environment.upper()}: balance "
+                              f"{s['balance']:,.2f} {s['currency']}.")
+    messages.info(request, "Markets: " + "; ".join(markets))
     return redirect("trading:dashboard")

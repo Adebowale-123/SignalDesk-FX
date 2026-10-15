@@ -6,10 +6,10 @@
 <div class="row between">
   <div>
     <h1 class="mb-0">Auto-trading</h1>
-    <p class="muted" style="max-width:75ch;margin-top:6px">When on, every fresh TRADE NOW signal is traded on your {% if mt5 %}MetaTrader 5{% else %}OANDA{% endif %} account with its stop loss and take profit attached at the broker. Trades close by themselves at take profit or stop loss, then it waits for the next signal.</p>
+    <p class="muted" style="max-width:75ch;margin-top:6px">When on, every fresh TRADE NOW signal is traded on your {% if capital %}Capital.com{% elif mt5 %}MetaTrader 5{% else %}OANDA{% endif %} account with its stop loss and take profit attached at the broker. Trades close by themselves at take profit or stop loss, then it waits for the next signal.</p>
   </div>
   <div class="row">
-    {% if live %}<span class="chip" style="background:var(--sell-soft);color:var(--sell)">LIVE ACCOUNT · REAL MONEY</span>{% else %}<span class="chip">{% if mt5 %}Demo account{% else %}Practice account{% endif %}</span>{% endif %}
+    {% if live %}<span class="chip" style="background:var(--sell-soft);color:var(--sell)">LIVE ACCOUNT · REAL MONEY</span>{% else %}<span class="chip">{% if mt5 or capital %}Demo account{% else %}Practice account{% endif %}</span>{% endif %}
     <form method="post" action="{% url 'trading:switch' %}" {% if not trader.enabled %}onsubmit="return confirm('Switch auto-trading ON{% if live %} with REAL MONEY{% endif %}?')"{% endif %}>{% csrf_token %}
       {% if trader.enabled %}<button class="btn" type="submit">⏸ Switch OFF</button>
       {% else %}<button class="btn btn-primary" type="submit" {% if steps %}disabled{% endif %}>▶ Switch ON</button>{% endif %}
@@ -33,7 +33,7 @@
   <div class="card kpi"><div class="label">Open trades</div><div class="value">{{ open_trades|length }} <span class="faint" style="font-size:13px">/ {{ trader.max_open_trades }}</span></div></div>
   <div class="card kpi"><div class="label">Closed trades P/L</div><div class="value {% if stats.pl > 0 %}pos{% elif stats.pl < 0 %}neg{% endif %}" style="font-size:20px">{% if stats.n %}{{ stats.pl|floatformat:2 }}{% else %}—{% endif %}</div><div class="faint" style="font-size:12.5px">{{ stats.n }} closed, {{ stats.wins }} won</div></div>
 </div>
-<p class="faint" style="font-size:13px;margin-top:-6px">Last checked {% if trader.last_sync_at %}{{ trader.last_sync_at|timesince }} ago{% else %}never{% endif %} · {% if mt5 %}{% if trader.bridge_info.login %}{{ trader.bridge_info.company }} · {{ trader.bridge_info.server }} · account {{ trader.bridge_info.login }}{% else %}no MT5 account connected yet{% endif %}{% else %}account {{ trader.account_id|default:"not set" }}{% endif %}.</p>
+<p class="faint" style="font-size:13px;margin-top:-6px">Last checked {% if trader.last_sync_at %}{{ trader.last_sync_at|timesince }} ago{% else %}never{% endif %} · {% if capital %}Capital.com {{ trader.capital_environment }} · {{ trader.capital_identifier|default:"login not set" }}{% elif mt5 %}{% if trader.bridge_info.login %}{{ trader.bridge_info.company }} · {{ trader.bridge_info.server }} · account {{ trader.bridge_info.login }}{% else %}no MT5 account connected yet{% endif %}{% else %}account {{ trader.account_id|default:"not set" }}{% endif %}.</p>
 
 {% if mt5 %}
 <section class="card" style="margin-bottom:16px">
@@ -65,7 +65,7 @@
       <tr><td style="white-space:nowrap">{{ t.created_at|date:"j M H:i" }}</td><td class="pair">{{ i.symbol }}</td>
         <td>{% if t.direction %}<span class="dir {{ t.direction }}"><span class="ball"></span>{{ t.direction|upper }}</span>{% endif %}</td>
         <td>{% if t.status == "open" %}<span class="chip on"><span class="dot"></span>Open</span>{% elif t.status == "closed" %}{% if t.close_reason == "tp" %}<span class="pos">Take profit</span>{% elif t.close_reason == "sl" %}<span class="neg">Stop loss</span>{% elif t.close_reason == "expired" %}Expired{% else %}Closed{% endif %}{% else %}<span class="faint">{{ t.get_status_display }}</span>{% endif %}</td>
-        <td class="num mono">{% if t.lots %}{{ t.lots }} lots{% elif t.units %}{{ t.units }}{% else %}—{% endif %}</td>
+        <td class="num mono">{% if t.lots %}{{ t.lots }}{% if t.environment == "mt5" %} lots{% endif %}{% elif t.units %}{{ t.units }}{% else %}—{% endif %}</td>
         <td class="num mono">{% if t.fill_price %}{{ t.fill_price|price:i }}{% else %}—{% endif %}</td>
         <td class="num mono">{{ t.stop_loss|price:i }}</td><td class="num mono">{{ t.take_profit|price:i }}</td>
         <td class="num mono {% if t.realized_pl > 0 %}pos{% elif t.realized_pl < 0 %}neg{% endif %}">{% if t.realized_pl is not None %}{{ t.realized_pl|floatformat:2 }}{% else %}—{% endif %}</td>
@@ -82,9 +82,15 @@
     <div class="form-grid">
       {% include "signals/_field.html" with field=form.broker_type %}
       {% include "signals/_field.html" with field=form.allow_live %}
-      {% if not mt5 %}{% include "signals/_field.html" with field=form.account_id %}{% endif %}
+      {% if capital %}
+        {% include "signals/_field.html" with field=form.capital_environment %}
+        {% include "signals/_field.html" with field=form.capital_identifier %}
+        {% include "signals/_field.html" with field=form.capital_api_key %}
+        {% include "signals/_field.html" with field=form.capital_password %}
+      {% elif not mt5 %}{% include "signals/_field.html" with field=form.account_id %}{% endif %}
     </div>
-    <p class="faint" style="font-size:13px;margin:12px 0 0">{% if mt5 %}MetaTrader 5: the account is whichever one MT5 is logged in to on the bridge computer. Stops and targets are placed at the same distance from your broker's fill price as the signal intended, so small price differences between data feeds don't change the risk.{% else %}OANDA: the API token and practice/live choice are in Settings → Data source, and OANDA must also be the price source.{% endif %}</p>
+    {% if capital %}<p class="faint" style="font-size:13px;margin:12px 0 0">Capital.com: Settings → Security → turn on two-factor authentication, then Settings → API integrations → Generate new key. Set a custom password for the key there (that's the “API key password”). Use a <b>demo</b> key first.</p>{% endif %}
+    <p class="faint" style="font-size:13px;margin:12px 0 0">{% if capital %}Runs on this website's server: nothing to install or keep switched on. Stops and targets are placed at the signal's distance from Capital.com's own live price.{% elif mt5 %}MetaTrader 5: the account is whichever one MT5 is logged in to on the bridge computer. Stops and targets are placed at the same distance from your broker's fill price as the signal intended, so small price differences between data feeds don't change the risk.{% else %}OANDA: the API token and practice/live choice are in Settings → Data source, and OANDA must also be the price source.{% endif %}</p>
   </fieldset>
   <fieldset>
     <legend>Risk rules</legend>

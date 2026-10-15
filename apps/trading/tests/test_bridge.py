@@ -49,6 +49,7 @@ class BridgeTestCase(TestCase):
     def setUp(self):
         self.trader = AutoTrader.load()
         self.trader.enabled = True
+        self.trader.broker_type = AutoTrader.Broker.MT5
         self.trader.save()
         self.eur = Instrument.objects.create(symbol="EUR/USD", pip_size=0.0001, decimals=5)
         self.profile = StrategyProfile.objects.create(name="Intraday", entry_timeframe="15m",

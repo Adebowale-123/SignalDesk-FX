@@ -9,11 +9,18 @@ class AutoTrader(models.Model):
     """Settings and state of automatic trading through OANDA (one row)."""
 
     class Broker(models.TextChoices):
-        MT5 = "mt5", "MetaTrader 5 (FXTM, Exness, HFM…) through the SignalDesk bridge"
+        CAPITAL = "capital", "Capital.com (direct — nothing to keep running)"
+        MT5 = "mt5", "MetaTrader 5 (FXTM, Exness, HFM…) through the Windows bridge"
         OANDA = "oanda", "OANDA (direct)"
 
     enabled = models.BooleanField(default=False, help_text="Master switch. Off = no new trades are opened.")
-    broker_type = models.CharField(max_length=10, choices=Broker.choices, default=Broker.MT5)
+    broker_type = models.CharField(max_length=10, choices=Broker.choices, default=Broker.CAPITAL)
+    capital_api_key = models.CharField(max_length=120, blank=True)
+    capital_identifier = models.CharField(max_length=200, blank=True, help_text="Your Capital.com login email.")
+    capital_password = models.CharField(max_length=200, blank=True,
+                                        help_text="The custom password you set when generating the API key.")
+    capital_environment = models.CharField(max_length=10, choices=[("demo", "Demo"), ("live", "Live (real money)")],
+                                           default="demo")
     bridge_key = models.CharField(max_length=64, blank=True, editable=False)
     bridge_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
     bridge_info = models.JSONField(default=dict, blank=True, editable=False)
@@ -79,6 +86,11 @@ class AutoTrader(models.Model):
     @property
     def bridge_account_is_real(self):
         return self.bridge_info.get("mode") == "real"
+
+    def traded_instruments(self):
+        from apps.market.models import Instrument
+
+        return Instrument.objects.filter(is_active=True)
 
     def traded_profiles(self):
         from apps.signals.models import StrategyProfile

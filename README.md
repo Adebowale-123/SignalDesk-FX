@@ -147,6 +147,27 @@ When switched on, every fresh TRADE NOW signal is traded on your broker account:
 2. Go to Settings → Data source: choose OANDA, paste the token, account type **Practice**.
 3. Go to Auto-trading → **Test connection** (it finds your account ID) → review the risk rules → **Switch ON**.
 
+### Capital.com (default — nothing to keep running)
+
+Capital.com accepts clients from Nigeria and has a public REST API, so the auto-trader runs on the SignalDesk server itself. Each analysis cycle it:
+
+- logs in to the API;
+- syncs positions, using the activity history to tell take profit from stop loss;
+- closes positions whose signal expired;
+- opens new positions.
+
+Stop loss and take profit are set at the signal's distances from Capital.com's own live price.
+
+**Safety:**
+- A hard cap refuses any position worth more than 30× the account (20× for gold).
+- Live accounts need explicit permission.
+
+**Setup:**
+1. In Capital.com, go to Settings → Security and turn on 2FA.
+2. Go to Settings → API integrations → **Generate new key** (demo), and set a custom password for the key.
+3. On the Auto-trading page, choose **Capital.com**, enter your login email, the API key and the key password, choose **Demo** and click **Save**.
+4. Click **Test connection** (it checks the account and every pair's market), then **Switch ON**.
+
 ### MetaTrader 5 brokers (FXTM, Exness, HFM…)
 
 MT5 can only be automated on Windows, so a small **bridge** program (`bridge/signaldesk_bridge.py`) runs on a Windows computer with MT5 open:
