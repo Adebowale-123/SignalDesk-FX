@@ -185,6 +185,20 @@ class CapitalCycleTests(CapitalTestCase):
         self.assertIn("safety", bt.message)
         self.assertEqual(self.broker.orders, [])
 
+    def test_cycle_never_undoes_the_switch(self):
+        """Switching OFF while a cycle runs must stick (the cycle saves only its own status fields)."""
+        original = capital_trader.capital_cycle
+
+        def cycle_with_click(trader, now):
+            AutoTrader.objects.filter(pk=1).update(enabled=False, risk_percent=0.5)  # someone clicks meanwhile
+            return original(trader, now)
+        with mock.patch.object(capital_trader, "capital_cycle", side_effect=cycle_with_click):
+            trade_cycle(now=NOW)
+        saved = AutoTrader.load()
+        self.assertFalse(saved.enabled)
+        self.assertEqual(float(saved.risk_percent), 0.5)
+        self.assertIsNotNone(saved.last_sync_at)
+
     def test_close_all(self):
         self.signal()
         trade_cycle(now=NOW)

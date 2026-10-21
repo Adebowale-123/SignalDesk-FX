@@ -308,7 +308,7 @@ def trade_cycle(now=None):
         trader.last_error = str(exc)[:255]
         log.warning("Auto-trading: %s", exc)
     trader.last_sync_at = now
-    trader.save()
+    trader.save_state()
     return summary
 
 
@@ -323,7 +323,7 @@ def _run_capital(trader, now):
         log.warning("Auto-trading (Capital.com): %s", exc)
         summary = {"status": "error"}
     trader.last_sync_at = now
-    trader.save()
+    trader.save_state()
     return summary
 
 

@@ -148,5 +148,9 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {"apps": {"handlers": ["console"], "level": "WARNING" if TESTING else env("LOG_LEVEL", "INFO")}},
+    "loggers": {
+        "apps": {"handlers": ["console"], "level": "WARNING" if TESTING else env("LOG_LEVEL", "INFO")},
+        # Server errors (500) with their traceback in the host's logs; Django hides them when DEBUG is off.
+        "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
 }

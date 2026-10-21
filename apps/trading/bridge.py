@@ -212,6 +212,6 @@ def exchange(payload, now=None):
         trader.close_all_requested = close_all = False
     trader.last_error = note
     trader.last_sync_at = now
-    trader.save()
+    trader.save_state(*trader.BRIDGE_FIELDS)
     return {"ok": True, "enabled": trader.enabled, "orders": orders, "close": closes, "close_all": close_all,
             "poll_seconds": POLL_SECONDS, "note": note}

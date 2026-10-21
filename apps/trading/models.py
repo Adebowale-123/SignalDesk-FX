@@ -27,7 +27,7 @@ class AutoTrader(models.Model):
     close_all_requested = models.BooleanField(default=False, editable=False)
     account_id = models.CharField(max_length=40, blank=True, help_text='OANDA account ID, e.g. "101-004-1234567-001".')
     allow_live = models.BooleanField(
-        default=False, help_text="Required before trading a LIVE (real money) OANDA account.")
+        default=False, help_text="Required before trading a LIVE (real money) account at any broker.")
     strategies = models.ManyToManyField("signals.StrategyProfile", blank=True,
                                         help_text="Strategies whose signals are traded. None ticked = all active.")
     risk_percent = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.00"),
@@ -86,6 +86,15 @@ class AutoTrader(models.Model):
     @property
     def bridge_account_is_real(self):
         return self.bridge_info.get("mode") == "real"
+
+    # Status fields written by the background trading cycle. It saves only these, so it never undoes a setting
+    # (like the on/off switch) that someone changed on the page while the cycle was running.
+    STATE_FIELDS = ["day_start", "day_start_nav", "week_start", "week_start_nav", "halted_until", "halt_reason",
+                    "last_sync_at", "last_error", "account_currency", "balance", "nav"]
+    BRIDGE_FIELDS = ["bridge_seen_at", "bridge_info", "close_all_requested"]
+
+    def save_state(self, *extra):
+        self.save(update_fields=[*self.STATE_FIELDS, *extra])
 
     def traded_instruments(self):
         from apps.market.models import Instrument
