@@ -19,7 +19,9 @@ def engine_tick(request):
     Needs ?key=ENGINE_TICK_KEY. Also keeps a free Render service awake.
     """
     key = settings.ENGINE_TICK_KEY
-    if not key or not hmac.compare_digest(request.GET.get("key", ""), key):
+    # "+" in a key arrives as a space when the link isn't URL-encoded (Render's generated keys can contain "+").
+    given = request.GET.get("key", "").replace(" ", "+")
+    if not key or not hmac.compare_digest(given, key):
         return HttpResponseForbidden("bad key")
     minutes = SiteSettings.load().engine_interval_minutes
     if cache.add("engine:last-run", True, max(60, minutes * 60 - 30)):

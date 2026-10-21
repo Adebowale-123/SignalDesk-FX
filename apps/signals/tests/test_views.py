@@ -63,5 +63,12 @@ class EngineTickTests(TestCase):
             response = self.client.get("/engine/tick/?key=secret")
             self.assertEqual(response.status_code, 200)
             start.assert_called_once()
+        with override_settings(ENGINE_TICK_KEY="a+b/c"), mock.patch("apps.core.views.start_engine", return_value=True):
+            from django.core.cache import cache
+
+            cache.clear()
+            self.assertEqual(self.client.get("/engine/tick/?key=a+b/c").status_code, 200)  # unencoded "+"
+            cache.clear()
+            self.assertEqual(self.client.get("/engine/tick/?key=a%2Bb/c").status_code, 200)  # encoded
         with override_settings(ENGINE_TICK_KEY=""):
             self.assertEqual(self.client.get("/engine/tick/?key=").status_code, 403)
