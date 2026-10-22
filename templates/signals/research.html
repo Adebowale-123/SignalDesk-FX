@@ -2,8 +2,9 @@
 {% block title %}Research{% endblock %}
 {% block head %}{% if running %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
 {% block content %}
-<h1>Research</h1>
-<p class="muted" style="max-width:75ch">What the system knows beyond the charts: fundamentals, market sentiment and speculator positioning (updated automatically), and the new strategies it has searched for by itself.</p>
+{% include "signals/_lab_tabs.html" with lab="research" %}
+<div class="page-head"><div><h1 class="mb-0">Research</h1>
+<p>What the system knows beyond the charts: fundamentals, market sentiment and speculator positioning (updated automatically), and the new strategies it has searched for by itself.</p></div></div>
 
 <div class="grid grid-2" style="margin-bottom:16px">
   <section class="card">
@@ -12,7 +13,7 @@
     <p class="faint" style="font-size:13px;margin-top:-4px">Daily closes up to {{ snap.as_of|date:"j M Y" }}.</p>
     <div class="table-wrap" style="box-shadow:none"><table>
       <tbody>{% for name, value, help in drivers %}
-        <tr><td><b>{{ name }}</b><div class="faint" style="font-size:12.5px">{{ help }}</div></td>
+        <tr><td class="wrap"><b>{{ name }}</b><div class="faint" style="font-size:12.5px">{{ help }}</div></td>
           <td class="num {{ value.tone }}" style="white-space:nowrap;font-weight:700">{{ value.text }}</td></tr>
       {% endfor %}</tbody>
     </table></div>
@@ -50,7 +51,7 @@
       <thead><tr><th>Timeframes</th><th>Best combination found</th><th class="num">Unseen trades</th><th class="num">Profit factor</th><th class="num">Total R</th><th>Result</th></tr></thead>
       <tbody>{% for r in rows %}
         <tr><td style="white-space:nowrap">{{ r.family }}</td>
-          <td style="font-size:13.5px">{{ r.summary|default:"—" }}{% if r.note %}<span class="faint">{{ r.note }}</span>{% endif %}</td>
+          <td class="wrap" style="font-size:13.5px">{{ r.summary|default:"—" }}{% if r.note %}<span class="faint">{{ r.note }}</span>{% endif %}</td>
           <td class="num">{{ r.test.trades|default:"—" }}</td><td class="num">{{ r.test.profit_factor|default:"—" }}</td>
           <td class="num mono {% if r.test.total_r > 0 %}pos{% elif r.test.total_r < 0 %}neg{% endif %}">{{ r.test.total_r|default:"—" }}</td>
           <td>{% if r.passed %}<span class="chip on"><span class="dot"></span>Passed</span>{% else %}<span class="chip">Not good enough</span>{% endif %}</td></tr>

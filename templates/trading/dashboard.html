@@ -3,116 +3,130 @@
 {% block title %}Auto-trading{% endblock %}
 {% block head %}<meta http-equiv="refresh" content="120">{% endblock %}
 {% block content %}
-<div class="row between">
-  <div>
-    <h1 class="mb-0">Auto-trading</h1>
-    <p class="muted" style="max-width:75ch;margin-top:6px">When on, every fresh TRADE NOW signal is traded on your {% if capital %}Capital.com{% elif mt5 %}MetaTrader 5{% else %}OANDA{% endif %} account with its stop loss and take profit attached at the broker. Trades close by themselves at take profit or stop loss, then it waits for the next signal.</p>
+<section class="hero">
+  <div class="hero-top">
+    <div>
+      <div class="eyebrow"><svg class="i"><use href="#i-auto"/></svg>Auto-trading · {% if capital %}Capital.com{% elif mt5 %}MetaTrader 5{% else %}OANDA{% endif %}</div>
+      <div class="big-status {% if trader.enabled and not trader.halted_until %}on{% elif trader.halted_until %}paused{% endif %}"><span class="orb"></span>{% if not trader.enabled %}Off{% elif trader.halted_until %}Paused{% else %}On — trading by itself{% endif %}</div>
+      <p class="lead" style="margin-top:10px">When on, every fresh TRADE NOW signal is traded on your {% if capital %}Capital.com{% elif mt5 %}MetaTrader 5{% else %}OANDA{% endif %} account with its stop loss and take profit attached at the broker. Trades close by themselves at take profit or stop loss, then it waits for the next signal.</p>
+    </div>
+    <div class="switchboard">
+      {% if live %}<span class="pill warn">LIVE ACCOUNT · REAL MONEY</span>{% else %}<span class="pill">{% if mt5 or capital %}Demo account{% else %}Practice account{% endif %}</span>{% endif %}
+      <form method="post" action="{% url 'trading:switch' %}" {% if not trader.enabled %}onsubmit="return confirm('Switch auto-trading ON{% if live %} with REAL MONEY{% endif %}?')"{% endif %}>{% csrf_token %}
+        {% if trader.enabled %}<button class="btn btn-lg" type="submit"><svg class="i"><use href="#i-pause"/></svg>Switch OFF</button>
+        {% else %}<button class="btn btn-primary btn-lg" type="submit" {% if steps %}disabled{% endif %}><svg class="i"><use href="#i-play"/></svg>Switch ON</button>{% endif %}
+      </form>
+    </div>
   </div>
-  <div class="row">
-    {% if live %}<span class="chip" style="background:var(--sell-soft);color:var(--sell)">LIVE ACCOUNT · REAL MONEY</span>{% else %}<span class="chip">{% if mt5 or capital %}Demo account{% else %}Practice account{% endif %}</span>{% endif %}
-    <form method="post" action="{% url 'trading:switch' %}" {% if not trader.enabled %}onsubmit="return confirm('Switch auto-trading ON{% if live %} with REAL MONEY{% endif %}?')"{% endif %}>{% csrf_token %}
-      {% if trader.enabled %}<button class="btn" type="submit">⏸ Switch OFF</button>
-      {% else %}<button class="btn btn-primary" type="submit" {% if steps %}disabled{% endif %}>▶ Switch ON</button>{% endif %}
-    </form>
+  <div class="hero-stats">
+    <div class="glass"><div class="label">Balance</div><div class="value mono">{% if trader.balance is not None %}{{ trader.balance|floatformat:2 }}{% else %}—{% endif %}</div><div class="sub">{{ trader.account_currency|default:"not connected" }}</div></div>
+    <div class="glass"><div class="label">Today</div><div class="value mono">{% if today %}{% if today.amount >= 0 %}+{% endif %}{{ today.amount|floatformat:2 }}{% else %}—{% endif %}</div><div class="sub">{% if today %}{% if today.pct >= 0 %}+{% endif %}{{ today.pct }}% · limit −{{ trader.daily_loss_limit }}%{% else %}since 00:00 UTC{% endif %}</div></div>
+    <div class="glass"><div class="label">Open trades</div><div class="value mono">{{ open_trades|length }} / {{ trader.max_open_trades }}</div><div class="sub">risk {{ trader.risk_percent|floatformat:"-2" }}% per trade</div></div>
+    <div class="glass"><div class="label">Closed trades P/L</div><div class="value mono">{% if stats.n %}{{ stats.pl|floatformat:2 }}{% else %}—{% endif %}</div><div class="sub">{{ stats.n }} closed, {{ stats.wins }} won</div></div>
   </div>
-</div>
+  <p class="small" style="margin:14px 0 0;color:rgba(255,255,255,.62)"><svg class="i" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-clock"/></svg> Last checked {% if trader.last_sync_at %}{{ trader.last_sync_at|timesince }} ago{% else %}never{% endif %} · {% if capital %}Capital.com {{ trader.capital_environment }} · {{ trader.capital_identifier|default:"login not set" }}{% elif mt5 %}{% if trader.bridge_info.login %}{{ trader.bridge_info.company }} · {{ trader.bridge_info.server }} · account {{ trader.bridge_info.login }}{% else %}no MT5 account connected yet{% endif %}{% else %}account {{ trader.account_id|default:"not set" }}{% endif %}.</p>
+</section>
 
 {% if steps %}
-<section class="card" style="margin:14px 0">
-  <h3>Setup ({{ steps|length }} step{{ steps|length|pluralize }} left)</h3>
-  <ol style="margin:0;padding-left:20px">{% for s in steps %}<li>{{ s }}</li>{% endfor %}</ol>
+<section class="card" style="margin-bottom:16px">
+  <div class="card-head"><h3>Almost there — {{ steps|length }} step{{ steps|length|pluralize }} left</h3><span class="badge open">Setup</span></div>
+  <ol class="steps">{% for s in steps %}<li><span>{{ s }}</span></li>{% endfor %}</ol>
 </section>
 {% endif %}
-{% if trader.halted_until %}<div class="notice" style="margin:14px 0"><b>Paused:</b> {{ trader.halt_reason }}
-  <form method="post" action="{% url 'trading:resume' %}" style="display:inline">{% csrf_token %}<button class="btn btn-sm" type="submit" onclick="return confirm('Clear the pause and measure losses again from now?')">Resume now</button></form></div>{% endif %}
-{% if trader.last_error %}<div class="msg error" style="margin:14px 0">{{ trader.last_error }}</div>{% endif %}
-
-<div class="grid grid-4" style="margin:16px 0">
-  <div class="card kpi"><div class="label">Status</div><div class="value {% if trader.enabled and not trader.halted_until %}pos{% endif %}" style="font-size:20px">{% if not trader.enabled %}Off{% elif trader.halted_until %}Paused{% else %}On{% endif %}</div></div>
-  <div class="card kpi"><div class="label">Balance</div><div class="value" style="font-size:20px">{% if trader.balance is not None %}{{ trader.balance|floatformat:2 }} <span class="faint" style="font-size:13px">{{ trader.account_currency }}</span>{% else %}—{% endif %}</div></div>
-  <div class="card kpi"><div class="label">Open trades</div><div class="value">{{ open_trades|length }} <span class="faint" style="font-size:13px">/ {{ trader.max_open_trades }}</span></div></div>
-  <div class="card kpi"><div class="label">Closed trades P/L</div><div class="value {% if stats.pl > 0 %}pos{% elif stats.pl < 0 %}neg{% endif %}" style="font-size:20px">{% if stats.n %}{{ stats.pl|floatformat:2 }}{% else %}—{% endif %}</div><div class="faint" style="font-size:12.5px">{{ stats.n }} closed, {{ stats.wins }} won</div></div>
-</div>
-<p class="faint" style="font-size:13px;margin-top:-6px">Last checked {% if trader.last_sync_at %}{{ trader.last_sync_at|timesince }} ago{% else %}never{% endif %} · {% if capital %}Capital.com {{ trader.capital_environment }} · {{ trader.capital_identifier|default:"login not set" }}{% elif mt5 %}{% if trader.bridge_info.login %}{{ trader.bridge_info.company }} · {{ trader.bridge_info.server }} · account {{ trader.bridge_info.login }}{% else %}no MT5 account connected yet{% endif %}{% else %}account {{ trader.account_id|default:"not set" }}{% endif %}.</p>
+{% if trader.halted_until %}<div class="notice" style="margin-bottom:16px"><div style="flex:1"><b>Paused:</b> {{ trader.halt_reason }}</div>
+  <form method="post" action="{% url 'trading:resume' %}">{% csrf_token %}<button class="btn btn-sm" type="submit" onclick="return confirm('Clear the pause and measure losses again from now?')">Resume now</button></form></div>{% endif %}
+{% if trader.last_error %}<div class="msg error" style="margin-bottom:16px">{{ trader.last_error }}</div>{% endif %}
 
 {% if mt5 %}
 <section class="card" style="margin-bottom:16px">
-  <div class="row between">
-    <h2 class="mb-0">MetaTrader 5 bridge</h2>
-    {% if trader.bridge_online %}<span class="chip on"><span class="dot"></span>Online</span>{% else %}<span class="chip" style="color:var(--sell)">Offline{% if trader.bridge_seen_at %} · last seen {{ trader.bridge_seen_at|timesince }} ago{% endif %}</span>{% endif %}
+  <div class="card-head">
+    <h3>MetaTrader 5 bridge</h3>
+    {% if trader.bridge_online %}<span class="chip on"><span class="dot"></span>Online</span>{% else %}<span class="chip warn"><span class="dot"></span>Offline{% if trader.bridge_seen_at %} · last seen {{ trader.bridge_seen_at|timesince }} ago{% endif %}</span>{% endif %}
   </div>
-  <p class="muted" style="font-size:14px">A small program on a Windows computer that sits next to MT5: it collects orders from SignalDesk every 20 seconds, places them with stop loss and take profit, and reports results. The computer must stay on (and MT5 open) while you want trading; stops and targets stay at the broker either way. While it runs, it also keeps this site awake.</p>
-  <ol style="margin:0 0 12px;padding-left:20px;font-size:14.5px">
-    <li>Install <b>MetaTrader 5</b> from your broker (FXTM: client area → Downloads), log in to your <b>demo</b> account, and switch on <b>Algo Trading</b> (toolbar). Also Tools → Options → Expert Advisors → tick “Allow algorithmic trading”.</li>
-    <li>Install <b>Python</b> for Windows from <span class="mono">python.org</span> — tick “Add python.exe to PATH” during setup.</li>
-    <li>Download the bridge below, put it in a folder (e.g. Desktop), and double-click it. The first run installs what it needs; then it shows “Connected”. Keep the window open.</li>
+  <p class="muted small">A small program on a Windows computer next to MT5: it collects orders from SignalDesk every 20 seconds, places them with stop loss and take profit, and reports results. The computer must stay on (and MT5 open) while you want trading; stops and targets stay at the broker either way.</p>
+  <ol class="steps" style="margin-bottom:14px">
+    <li><span>Install <b>MetaTrader 5</b> from your broker, log in to your <b>demo</b> account, and switch on <b>Algo Trading</b>. Also Tools → Options → Expert Advisors → tick “Allow algorithmic trading”.</span></li>
+    <li><span>Install <b>Python</b> for Windows from <span class="mono">python.org</span> — tick “Add python.exe to PATH”.</span></li>
+    <li><span>Download the bridge, double-click it, and keep the window open. It shows “Connected”.</span></li>
   </ol>
   <div class="row">
     <a class="btn btn-primary btn-sm" href="{% url 'trading:download_bridge' %}">⬇ Download bridge (signaldesk_bridge.py)</a>
     <form method="post" action="{% url 'trading:new_bridge_key' %}" onsubmit="return confirm('Make a new key? The bridge file you downloaded before will stop working.')">{% csrf_token %}<button class="btn btn-sm" type="submit">New key</button></form>
   </div>
-  <p class="faint" style="font-size:12.5px;margin:10px 0 0">The file contains your private bridge key: don't share it. If it leaks, press New key and download again.</p>
+  <p class="faint small" style="margin:10px 0 0">The file contains your private bridge key: don't share it. If it leaks, press New key and download again.</p>
 </section>
 {% endif %}
 
-<section class="card" style="margin-bottom:16px">
-  <div class="row between"><h2 class="mb-0">Trades</h2>
+<section class="card" style="margin-bottom:22px">
+  <div class="card-head"><h3>Trades</h3>
     {% if open_trades %}<form method="post" action="{% url 'trading:close_all' %}" onsubmit="return confirm('Switch auto-trading OFF and close ALL open trades at market now?')">{% csrf_token %}<button class="btn btn-sm btn-danger" type="submit">■ Stop and close all</button></form>{% endif %}
   </div>
-  <div class="table-wrap" style="box-shadow:none;margin-top:10px"><table>
-    <thead><tr><th>Time</th><th>Pair</th><th>Side</th><th>Status</th><th class="num">Size</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">P/L</th><th>Note</th></tr></thead>
-    <tbody>{% for t in trades %}{% with i=t.instrument %}
-      <tr><td style="white-space:nowrap">{{ t.created_at|date:"j M H:i" }}</td><td class="pair">{{ i.symbol }}</td>
-        <td>{% if t.direction %}<span class="dir {{ t.direction }}"><span class="ball"></span>{{ t.direction|upper }}</span>{% endif %}</td>
-        <td>{% if t.status == "open" %}<span class="chip on"><span class="dot"></span>Open</span>{% elif t.status == "closed" %}{% if t.close_reason == "tp" %}<span class="pos">Take profit</span>{% elif t.close_reason == "sl" %}<span class="neg">Stop loss</span>{% elif t.close_reason == "expired" %}Expired{% else %}Closed{% endif %}{% else %}<span class="faint">{{ t.get_status_display }}</span>{% endif %}</td>
-        <td class="num mono">{% if t.lots %}{{ t.lots }}{% if t.environment == "mt5" %} lots{% endif %}{% elif t.units %}{{ t.units }}{% else %}—{% endif %}</td>
-        <td class="num mono">{% if t.fill_price %}{{ t.fill_price|price:i }}{% else %}—{% endif %}</td>
-        <td class="num mono">{{ t.stop_loss|price:i }}</td><td class="num mono">{{ t.take_profit|price:i }}</td>
-        <td class="num mono {% if t.realized_pl > 0 %}pos{% elif t.realized_pl < 0 %}neg{% endif %}">{% if t.realized_pl is not None %}{{ t.realized_pl|floatformat:2 }}{% else %}—{% endif %}</td>
-        <td class="muted" style="font-size:13px">{{ t.message }}</td></tr>
-    {% endwith %}{% empty %}<tr><td colspan="10" class="empty">No trades yet. When auto-trading is on, every new TRADE NOW signal appears here: traded, or skipped with the reason.</td></tr>{% endfor %}</tbody>
-  </table></div>
+  <div class="trade-list">
+  {% for t in trades %}{% with i=t.instrument %}
+    <div class="titem {% if t.status == 'open' %}open{% endif %}">
+      {% cur_badges i "sm" %}
+      <div class="t-main">
+        <div class="row" style="gap:8px"><b>{{ i.symbol }}</b>{% if t.direction %}<span class="badge {{ t.direction }}">{{ t.direction|upper }}</span>{% endif %}
+          {% if t.status == "open" %}<span class="chip on"><span class="dot"></span>Open</span>
+          {% elif t.status == "closed" %}{% if t.close_reason == "tp" %}<span class="badge tp">Take profit</span>{% elif t.close_reason == "sl" %}<span class="badge sl">Stop loss</span>{% elif t.close_reason == "expired" %}<span class="badge">Expired</span>{% else %}<span class="badge">Closed</span>{% endif %}
+          {% else %}<span class="badge">{{ t.get_status_display }}</span>{% endif %}</div>
+        <div class="meta">{{ t.created_at|date:"D j M, H:i" }}{% if t.lots %} · size {{ t.lots }}{% if t.environment == "mt5" %} lots{% endif %}{% elif t.units %} · {{ t.units }} units{% endif %}</div>
+        {% if t.fill_price or t.stop_loss %}<div class="t-levels"><span>Entry <b>{% if t.fill_price %}{{ t.fill_price|price:i }}{% else %}—{% endif %}</b></span><span>SL <b>{{ t.stop_loss|price:i }}</b></span><span>TP <b>{{ t.take_profit|price:i }}</b></span></div>{% endif %}
+      </div>
+      <div class="t-right">{% if t.realized_pl is not None %}<div class="pl {% if t.realized_pl > 0 %}pos{% elif t.realized_pl < 0 %}neg{% endif %}">{% if t.realized_pl > 0 %}+{% endif %}{{ t.realized_pl|floatformat:2 }}</div>{% elif t.risk_amount %}<div class="faint small">risk {{ t.risk_amount|floatformat:2 }}</div>{% endif %}</div>
+      {% if t.message %}<div class="note">{{ t.message }}</div>{% endif %}
+    </div>
+  {% endwith %}{% empty %}
+    <div class="empty"><span class="big">🛰️</span>No trades yet. When auto-trading is on, every new TRADE NOW signal appears here: traded, or skipped with the reason.</div>
+  {% endfor %}
+  </div>
 </section>
 
-<form method="post" class="stack">
+<form method="post">
   {% csrf_token %}
   {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
-  <fieldset>
-    <legend>Account</legend>
-    <div class="form-grid">
-      {% include "signals/_field.html" with field=form.broker_type %}
-      {% include "signals/_field.html" with field=form.allow_live %}
-      {% if capital %}
-        {% include "signals/_field.html" with field=form.capital_environment %}
-        {% include "signals/_field.html" with field=form.capital_identifier %}
-        {% include "signals/_field.html" with field=form.capital_api_key %}
-        {% include "signals/_field.html" with field=form.capital_password %}
-      {% elif not mt5 %}{% include "signals/_field.html" with field=form.account_id %}{% endif %}
+  <details class="panel" {% if steps or form.errors %}open{% endif %}>
+    <summary><span class="ico"><svg class="i"><use href="#i-plug"/></svg></span><div><b>Broker connection</b><span class="sub">{% if capital %}Capital.com {{ trader.capital_environment }}{% elif mt5 %}MetaTrader 5 bridge{% else %}OANDA{% endif %}{% if trader.balance is not None %} · connected{% endif %}</span></div></summary>
+    <div class="panel-body">
+      <div class="form-grid">
+        {% include "signals/_field.html" with field=form.broker_type %}
+        {% include "signals/_field.html" with field=form.allow_live %}
+        {% if capital %}
+          {% include "signals/_field.html" with field=form.capital_environment %}
+          {% include "signals/_field.html" with field=form.capital_identifier %}
+          {% include "signals/_field.html" with field=form.capital_api_key %}
+          {% include "signals/_field.html" with field=form.capital_password %}
+        {% elif not mt5 %}{% include "signals/_field.html" with field=form.account_id %}{% endif %}
+      </div>
+      {% if capital %}<p class="faint small" style="margin:14px 0 0">Capital.com: Settings → Security → turn on two-factor authentication, then Settings → API integrations → Generate new key, with a custom password (the “API key password”). Use a <b>demo</b> key first. Runs on this website's server: nothing to install or keep switched on.</p>
+      {% elif mt5 %}<p class="faint small" style="margin:14px 0 0">MetaTrader 5: the account is whichever one MT5 is logged in to on the bridge computer.</p>
+      {% else %}<p class="faint small" style="margin:14px 0 0">OANDA: the API token and practice/live choice are in Settings → Data source, and OANDA must also be the price source.</p>{% endif %}
     </div>
-    {% if capital %}<p class="faint" style="font-size:13px;margin:12px 0 0">Capital.com: Settings → Security → turn on two-factor authentication, then Settings → API integrations → Generate new key. Set a custom password for the key there (that's the “API key password”). Use a <b>demo</b> key first.</p>{% endif %}
-    <p class="faint" style="font-size:13px;margin:12px 0 0">{% if capital %}Runs on this website's server: nothing to install or keep switched on. Stops and targets are placed at the signal's distance from Capital.com's own live price.{% elif mt5 %}MetaTrader 5: the account is whichever one MT5 is logged in to on the bridge computer. Stops and targets are placed at the same distance from your broker's fill price as the signal intended, so small price differences between data feeds don't change the risk.{% else %}OANDA: the API token and practice/live choice are in Settings → Data source, and OANDA must also be the price source.{% endif %}</p>
-  </fieldset>
-  <fieldset>
-    <legend>Risk rules</legend>
-    <div class="form-grid">
-      {% include "signals/_field.html" with field=form.risk_percent %}
-      {% include "signals/_field.html" with field=form.max_open_trades %}
-      {% include "signals/_field.html" with field=form.daily_loss_limit %}
-      {% include "signals/_field.html" with field=form.weekly_loss_limit %}
-      {% include "signals/_field.html" with field=form.max_slippage_r %}
-      {% include "signals/_field.html" with field=form.min_confidence %}
-      {% include "signals/_field.html" with field=form.close_on_expiry %}
+  </details>
+  <details class="panel" {% if form.errors %}open{% endif %}>
+    <summary><span class="ico"><svg class="i"><use href="#i-shield"/></svg></span><div><b>Risk rules</b><span class="sub">{{ trader.risk_percent|floatformat:"-2" }}% per trade · max {{ trader.max_open_trades }} open · stop at −{{ trader.daily_loss_limit }}% a day</span></div></summary>
+    <div class="panel-body">
+      <div class="form-grid">
+        {% include "signals/_field.html" with field=form.risk_percent %}
+        {% include "signals/_field.html" with field=form.max_open_trades %}
+        {% include "signals/_field.html" with field=form.daily_loss_limit %}
+        {% include "signals/_field.html" with field=form.weekly_loss_limit %}
+        {% include "signals/_field.html" with field=form.max_slippage_r %}
+        {% include "signals/_field.html" with field=form.min_confidence %}
+        {% include "signals/_field.html" with field=form.close_on_expiry %}
+      </div>
+      <p class="faint small" style="margin:14px 0 0">Position size is calculated so that hitting the stop loss loses about your risk % of the account. Only one trade per pair at a time. No trade is opened close to high-impact news.</p>
     </div>
-    <p class="faint" style="font-size:13px;margin:12px 0 0">Position size is calculated so that hitting the stop loss loses about your risk % of the account. Only one trade per pair at a time. No trade is opened close to high-impact news.</p>
-  </fieldset>
-  <fieldset>
-    <legend>Which signals</legend>
-    {% include "signals/_field.html" with field=form.strategies %}
-  </fieldset>
+  </details>
+  <details class="panel">
+    <summary><span class="ico"><svg class="i"><use href="#i-list"/></svg></span><div><b>Which signals</b><span class="sub">{% with n=trader.strategies.count %}{% if n %}{{ n }} chosen strateg{{ n|pluralize:"y,ies" }}{% else %}every active strategy{% endif %}{% endwith %}</span></div></summary>
+    <div class="panel-body">{% include "signals/_field.html" with field=form.strategies %}</div>
+  </details>
   <div class="row">
-    <button class="btn btn-primary" type="submit">Save settings</button>
+    <button class="btn btn-primary" type="submit"><svg class="i"><use href="#i-check"/></svg>Save settings</button>
+    {% if not mt5 %}<button class="btn" type="submit" form="test-connection"><svg class="i"><use href="#i-plug"/></svg>Test connection</button>{% endif %}
   </div>
 </form>
-{% if not mt5 %}<form method="post" action="{% url 'trading:test' %}" style="margin-top:10px">{% csrf_token %}<button class="btn btn-sm" type="submit">Test connection</button></form>{% endif %}
-<p class="faint" style="font-size:13px;margin-top:18px">Automated trading can lose money, including faster than manual trading. Run it on a practice account until its results there convince you. This is software you control, not financial advice.</p>
+{% if not mt5 %}<form id="test-connection" method="post" action="{% url 'trading:test' %}">{% csrf_token %}</form>{% endif %}
+<p class="faint small" style="margin-top:22px">Automated trading can lose money, including faster than manual trading. Run it on a practice account until its results there convince you. This is software you control, not financial advice.</p>
 {% endblock %}

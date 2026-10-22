@@ -1,0 +1,4 @@
+<div class="tabs" style="margin-bottom:18px">
+  <a href="{% url 'signals:research' %}" class="{% if lab == 'research' %}active{% endif %}">Research</a>
+  <a href="{% url 'signals:backtests' %}" class="{% if lab == 'backtests' %}active{% endif %}">Backtests &amp; self-tuning</a>
+</div>

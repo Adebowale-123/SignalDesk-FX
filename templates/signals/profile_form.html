@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{% if profile %}Edit {{ profile }}{% else %}New strategy{% endif %}{% endblock %}
 {% block content %}
-<a href="{% url 'signals:settings' %}">← Settings</a>
-<h1 style="margin-top:10px">{% if profile %}Edit strategy{% else %}New strategy{% endif %}</h1>
-<p class="muted">Pick when to look for entries and which bigger timeframes must agree. After saving, run a backtest so the board's confidence matches these rules.</p>
+<a class="btn btn-sm" href="{% url 'signals:settings' %}"><svg class="i"><use href="#i-arrow-left"/></svg>Settings</a>
+<div class="page-head" style="margin-top:16px"><div><h1 class="mb-0">{% if profile %}Edit strategy{% else %}New strategy{% endif %}</h1>
+<p>Pick when to look for entries and which bigger timeframes must agree. After saving, run a backtest so the board's confidence matches these rules.</p></div></div>
 <form method="post">
   {% csrf_token %}
   {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
@@ -74,7 +74,7 @@
       </div>
     </fieldset>
   </details>
-  <div class="row" style="margin-top:14px"><button class="btn btn-primary" type="submit">Save strategy</button></div>
+  <div class="row" style="margin-top:14px"><button class="btn btn-primary" type="submit"><svg class="i"><use href="#i-check"/></svg>Save strategy</button></div>
 </form>
 {% if profile %}
 <form method="post" action="{% url 'signals:profile_delete' profile.pk %}" style="margin-top:24px" onsubmit="return confirm('Delete this strategy and its history?')">

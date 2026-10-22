@@ -2,38 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1233">
   <title>{% block title %}Signals{% endblock %} · SignalDesk FX</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=1">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=3">
   {% block head %}{% endblock %}
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b5bf6"/><stop offset="1" stop-color="#14b8a6"/></linearGradient>
+      <linearGradient id="eqgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b5bf6" stop-opacity=".28"/><stop offset="1" stop-color="#5b5bf6" stop-opacity="0"/></linearGradient>
+    </defs>
+    <symbol id="i-logo" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></symbol>
+    <symbol id="i-signals" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+    <symbol id="i-results" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+    <symbol id="i-lab" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7 15h10"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="15" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="16" y1="15" x2="18" y2="15"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  </defs></svg>
+
+  {% block shell %}
   {% if user.is_authenticated %}
+  {% with p=request.path %}
   <header class="topbar">
     <div class="inner">
-      <a class="logo" href="{% url 'signals:board' %}"><span class="logo-mark">⇅</span>SignalDesk FX</a>
-      {% with p=request.path %}
+      <a class="logo" href="{% url 'signals:board' %}"><span class="logo-mark"><svg><use href="#i-logo"/></svg></span>SignalDesk</a>
       <nav class="main" aria-label="Main">
-        <a href="{% url 'signals:board' %}" class="{% if p == '/' or '/pair/' in p %}active{% endif %}">Signals</a>
-        <a href="{% url 'signals:history' %}" class="{% if '/history/' in p %}active{% endif %}">Track record</a>
-        <a href="{% url 'signals:backtests' %}" class="{% if '/backtests/' in p %}active{% endif %}">Backtests</a>
-        <a href="{% url 'signals:research' %}" class="{% if '/research/' in p %}active{% endif %}">Research</a>
-        {% if user.is_staff %}<a href="{% url 'trading:dashboard' %}" class="{% if '/auto-trading/' in p %}active{% endif %}">Auto-trading</a>{% endif %}
-        {% if user.is_staff %}<a href="{% url 'signals:settings' %}" class="{% if '/settings/' in p %}active{% endif %}">Settings</a>{% endif %}
+        <a href="{% url 'signals:board' %}" class="{% if p == '/' or '/pair/' in p %}active{% endif %}"><svg class="i"><use href="#i-signals"/></svg>Signals</a>
+        {% if user.is_staff %}<a href="{% url 'trading:dashboard' %}" class="{% if '/auto-trading/' in p %}active{% endif %}"><svg class="i"><use href="#i-auto"/></svg>Auto-trading</a>{% endif %}
+        <a href="{% url 'signals:history' %}" class="{% if '/history/' in p %}active{% endif %}"><svg class="i"><use href="#i-results"/></svg>Results</a>
+        <a href="{% url 'signals:research' %}" class="{% if '/research/' in p or '/backtests/' in p %}active{% endif %}"><svg class="i"><use href="#i-lab"/></svg>Lab</a>
+        {% if user.is_staff %}<a href="{% url 'signals:settings' %}" class="{% if '/settings/' in p %}active{% endif %}"><svg class="i"><use href="#i-settings"/></svg>Settings</a>{% endif %}
       </nav>
-      {% endwith %}
-      <div class="user"><span>{{ user.get_username }}</span>
-        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-sm" type="submit">Log out</button></form>
+      <div class="user">
+        <span class="avatar" title="{{ user.get_username }}">{{ user.get_username|slice:":1" }}</span>
+        <span class="name">{{ user.get_username }}</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-sm" type="submit" title="Log out"><svg class="i"><use href="#i-logout"/></svg><span class="name">Log out</span></button></form>
       </div>
     </div>
   </header>
+  <nav class="tabbar" aria-label="Main (mobile)">
+    <a href="{% url 'signals:board' %}" class="{% if p == '/' or '/pair/' in p %}active{% endif %}"><svg class="i"><use href="#i-signals"/></svg>Signals</a>
+    {% if user.is_staff %}<a href="{% url 'trading:dashboard' %}" class="{% if '/auto-trading/' in p %}active{% endif %}"><svg class="i"><use href="#i-auto"/></svg>Trading</a>{% endif %}
+    <a href="{% url 'signals:history' %}" class="{% if '/history/' in p %}active{% endif %}"><svg class="i"><use href="#i-results"/></svg>Results</a>
+    <a href="{% url 'signals:research' %}" class="{% if '/research/' in p or '/backtests/' in p %}active{% endif %}"><svg class="i"><use href="#i-lab"/></svg>Lab</a>
+    {% if user.is_staff %}<a href="{% url 'signals:settings' %}" class="{% if '/settings/' in p %}active{% endif %}"><svg class="i"><use href="#i-settings"/></svg>Settings</a>{% endif %}
+  </nav>
+  {% endwith %}
   {% endif %}
   <main class="page">
     {% if messages %}<ul class="messages">{% for m in messages %}<li class="msg {{ m.tags }}">{{ m }}</li>{% endfor %}</ul>{% endif %}
     {% block content %}{% endblock %}
   </main>
+  {% endblock %}
   <script>
     // Disable a submit button while its (possibly slow) request runs.
     document.querySelectorAll("form[data-busy]").forEach(f => f.addEventListener("submit", () => {

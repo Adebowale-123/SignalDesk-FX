@@ -1,17 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Log in{% endblock %}
-{% block content %}
-<div class="card login-box">
-  <div class="logo" style="margin-bottom:14px"><span class="logo-mark">⇅</span>SignalDesk FX</div>
-  <h1>Log in</h1>
-  <p class="muted">Private portal for your team.</p>
-  <form method="post">
-    {% csrf_token %}
-    {% if form.non_field_errors %}<div class="msg error">Wrong username or password.</div>{% endif %}
-    <div class="field"><label for="id_username">Username</label>{{ form.username }}</div>
-    <div class="field" style="margin-top:12px"><label for="id_password">Password</label>{{ form.password }}</div>
-    <input type="hidden" name="next" value="{{ next }}">
-    <button class="btn btn-primary" type="submit" style="margin-top:16px;width:100%;justify-content:center">Log in</button>
-  </form>
+{% block shell %}
+<div class="login-wrap">
+  <section class="login-art">
+    <a class="logo" style="color:#fff"><span class="logo-mark"><svg><use href="#i-logo"/></svg></span>SignalDesk FX</a>
+    <div>
+      <h2>Know when to trade — and when to wait.</h2>
+      <p>Live analysis of the major pairs and gold: trend, momentum, news, fundamentals and sentiment, turned into one clear decision.</p>
+    </div>
+    <div class="demo">
+      <div class="glass"><span class="curs"><span class="cur cur-sm cur-EUR">€</span><span class="cur cur-sm cur-USD">$</span></span>
+        <div style="flex:1"><b>EUR/USD</b><div class="sub">Pullback with the trend</div></div><span class="pill on"><span class="dot"></span>BUY</span></div>
+      <div class="glass"><span class="curs"><span class="cur cur-sm two cur-XAU">Au</span><span class="cur cur-sm cur-USD">$</span></span>
+        <div style="flex:1"><b>XAU/USD</b><div class="sub">News due — waiting</div></div><span class="pill">WAIT</span></div>
+    </div>
+  </section>
+  <section class="login-form">
+    <div class="login-box">
+      <h1>Welcome back</h1>
+      <p class="muted">Log in to your private trading desk.</p>
+      <form method="post" class="stack" style="margin-top:20px">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="msg error">Wrong username or password.</div>{% endif %}
+        <div class="field"><label for="id_username">Username</label>{{ form.username }}</div>
+        <div class="field"><label for="id_password">Password</label>{{ form.password }}</div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button class="btn btn-primary btn-lg" type="submit" style="width:100%">Log in</button>
+      </form>
+      <p class="faint small" style="margin-top:22px">Private portal for your team. Decision support, not financial advice.</p>
+    </div>
+  </section>
 </div>
 {% endblock %}

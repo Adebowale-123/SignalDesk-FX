@@ -1,69 +1,78 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
 {% block content %}
-<h1>Settings</h1>
-<p class="muted">Set up your strategies, pairs, data source and alerts. Changes apply on the next analysis.</p>
+<div class="page-head">
+  <div><h1 class="mb-0">Settings</h1><p>Your strategies, pairs, data and alerts. Changes apply on the next analysis.</p></div>
+</div>
 
 <section class="card" style="margin-bottom:16px">
-  <div class="row between"><h2 class="mb-0">Strategies</h2><a class="btn btn-primary btn-sm" href="{% url 'signals:profile_new' %}">+ New strategy</a></div>
-  <p class="muted" style="font-size:14px">A strategy decides the timeframes and rules. You can run several side by side and compare their backtests.</p>
-  <div class="table-wrap" style="box-shadow:none"><table>
-    <thead><tr><th>Name</th><th>Timeframes</th><th class="num">R:R</th><th class="num">Min score</th><th>Status</th><th></th></tr></thead>
-    <tbody>{% for p in profiles %}
-      <tr><td class="pair">{{ p.name }}{% if p.discovered %} <span class="chip" title="Built by the system">Auto</span>{% endif %}</td><td>{{ p.timeframes_label }}</td><td class="num">1:{{ p.risk_reward|floatformat:"-2" }}</td>
-        <td class="num">{{ p.min_score }}</td><td>{% if p.is_active %}<span class="chip on"><span class="dot"></span>Active</span>{% else %}<span class="chip">Off</span>{% endif %}</td>
-        <td class="num"><a class="btn btn-sm" href="{% url 'signals:profile_edit' p.pk %}">Edit</a></td></tr>
-    {% empty %}<tr><td colspan="6" class="empty">No strategies yet.</td></tr>{% endfor %}</tbody>
-  </table></div>
+  <div class="card-head"><div><h3>Strategies</h3><span class="muted small">Each strategy sets its timeframes and rules. Several can run side by side.</span></div>
+    <a class="btn btn-primary btn-sm" href="{% url 'signals:profile_new' %}">+ New strategy</a></div>
+  <div class="trade-list">
+  {% for p in profiles %}
+    <a class="titem" href="{% url 'signals:profile_edit' p.pk %}" style="color:inherit;text-decoration:none">
+      <span class="ico" style="width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand)"><svg class="i"><use href="#i-target"/></svg></span>
+      <div class="t-main"><div class="row" style="gap:8px"><b>{{ p.name }}</b>{% if p.discovered %}<span class="badge open" title="Built by the system">Auto</span>{% endif %}</div>
+        <div class="meta">{{ p.timeframes_label }} · 1:{{ p.risk_reward|floatformat:"-2" }} · min score {{ p.min_score }}</div></div>
+      <div class="t-right">{% if p.is_active %}<span class="chip on"><span class="dot"></span>Active</span>{% else %}<span class="chip">Off</span>{% endif %}</div>
+    </a>
+  {% empty %}<div class="empty">No strategies yet.</div>{% endfor %}
+  </div>
 </section>
 
 <section class="card" style="margin-bottom:16px">
-  <h2>Pairs</h2>
-  <p class="muted" style="font-size:14px">Click a pair to switch it on or off for every strategy.</p>
+  <div class="card-head"><div><h3>Pairs</h3><span class="muted small">Tap a pair to switch it on or off for every strategy.</span></div></div>
   <div class="row">
     {% for i in instruments %}
       <form method="post" action="{% url 'signals:toggle_instrument' i.pk %}">{% csrf_token %}
-        <button class="chip {% if i.is_active %}on{% endif %}" type="submit" style="border:0;cursor:pointer;font:inherit;font-weight:700;padding:6px 12px"><span class="dot"></span>{{ i.symbol }}</button>
+        <button class="chip {% if i.is_active %}on{% endif %}" type="submit" style="border:0;cursor:pointer;font:inherit;font-weight:800;padding:8px 14px;font-size:13.5px"><span class="dot"></span>{{ i.symbol }}</button>
       </form>
     {% endfor %}
   </div>
-  <p class="faint" style="font-size:13px;margin-bottom:0">To add another pair (for example EUR/JPY), use <a href="/admin/market/instrument/add/">Admin → Instruments</a>.</p>
+  <p class="faint small" style="margin:12px 0 0">To add another pair (for example EUR/JPY), use <a href="/admin/market/instrument/add/">Admin → Instruments</a>.</p>
 </section>
 
-<form method="post" class="stack">
+<form method="post">
   {% csrf_token %}
   {% if form.non_field_errors %}<div class="msg error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
-  <fieldset>
-    <legend>Price data source</legend>
-    <div class="form-grid">
-      {% include "signals/_field.html" with field=form.data_provider %}
-      {% include "signals/_field.html" with field=form.engine_interval_minutes %}
-      {% include "signals/_field.html" with field=form.twelvedata_api_key %}
-      {% include "signals/_field.html" with field=form.oanda_api_token %}
-      {% include "signals/_field.html" with field=form.oanda_environment %}
+  <details class="panel" {% if form.errors %}open{% endif %}>
+    <summary><span class="ico"><svg class="i"><use href="#i-database"/></svg></span><div><b>Price data source</b><span class="sub">{{ form.instance.get_data_provider_display }} · analysis every {{ form.instance.engine_interval_minutes }} min</span></div></summary>
+    <div class="panel-body">
+      <div class="form-grid">
+        {% include "signals/_field.html" with field=form.data_provider %}
+        {% include "signals/_field.html" with field=form.engine_interval_minutes %}
+        {% include "signals/_field.html" with field=form.twelvedata_api_key %}
+        {% include "signals/_field.html" with field=form.oanda_api_token %}
+        {% include "signals/_field.html" with field=form.oanda_environment %}
+      </div>
+      <p class="faint small" style="margin:14px 0 0">Yahoo works with no account.</p>
     </div>
-    <p class="faint" style="font-size:13px;margin:12px 0 0">Yahoo works with no account. For live trading decisions, a free OANDA practice account gives the most reliable real-time prices (Account → Manage API access → Generate token).</p>
-  </fieldset>
-  <fieldset>
-    <legend>Alerts</legend>
-    <div class="form-grid">
-      {% include "signals/_field.html" with field=form.telegram_bot_token %}
-      {% include "signals/_field.html" with field=form.telegram_chat_id %}
-      {% include "signals/_field.html" with field=form.alert_emails %}
-      {% include "signals/_field.html" with field=form.alert_on_close %}
+  </details>
+  <details class="panel" {% if form.errors %}open{% endif %}>
+    <summary><span class="ico"><svg class="i"><use href="#i-bell"/></svg></span><div><b>Alerts</b><span class="sub">{% if form.instance.telegram_chat_id %}Telegram connected{% else %}Telegram not set up{% endif %}{% if form.instance.email_list %} · email{% endif %}</span></div></summary>
+    <div class="panel-body">
+      <div class="form-grid">
+        {% include "signals/_field.html" with field=form.telegram_bot_token %}
+        {% include "signals/_field.html" with field=form.telegram_chat_id %}
+        {% include "signals/_field.html" with field=form.alert_emails %}
+        {% include "signals/_field.html" with field=form.alert_on_close %}
+      </div>
+      <p class="faint small" style="margin:14px 0 0">Telegram: message <b>@BotFather</b> → /newbot to get a token, tap Start on your bot, then get your chat ID from <b>@userinfobot</b>.</p>
     </div>
-    <p class="faint" style="font-size:13px;margin:12px 0 0">Telegram: message <b>@BotFather</b> → /newbot to get a token. Then send your bot a message and open <span class="mono">api.telegram.org/bot&lt;token&gt;/getUpdates</span> to find your chat ID.</p>
-  </fieldset>
-  <fieldset>
-    <legend>Strategy discovery</legend>
-    <div class="form-grid">
-      {% include "signals/_field.html" with field=form.auto_discover %}
-      {% include "signals/_field.html" with field=form.discover_every_days %}
-      {% include "signals/_field.html" with field=form.max_discovered_active %}
+  </details>
+  <details class="panel" {% if form.errors %}open{% endif %}>
+    <summary><span class="ico"><svg class="i"><use href="#i-lab"/></svg></span><div><b>Strategy discovery</b><span class="sub">{% if form.instance.auto_discover %}Automatic, every {{ form.instance.discover_every_days }} days{% else %}Off{% endif %}</span></div></summary>
+    <div class="panel-body">
+      <div class="form-grid">
+        {% include "signals/_field.html" with field=form.auto_discover %}
+        {% include "signals/_field.html" with field=form.discover_every_days %}
+        {% include "signals/_field.html" with field=form.max_discovered_active %}
+      </div>
+      <p class="faint small" style="margin:14px 0 0">The system builds new strategies from its building blocks, tests them on history, and adds only those that stay profitable on recent data they were not chosen on. Discovered strategies are re-tested weekly and switched off automatically if they stop working.</p>
     </div>
-    <p class="faint" style="font-size:13px;margin:12px 0 0">The system builds new strategies from its building blocks, tests them on history, and adds only those that stay profitable on recent data they were not chosen on. Discovered strategies are re-tested weekly and switched off automatically if they stop working. See the Research page.</p>
-  </fieldset>
-  <div class="row"><button class="btn btn-primary" type="submit">Save settings</button></div>
+  </details>
+  <div class="row"><button class="btn btn-primary" type="submit"><svg class="i"><use href="#i-check"/></svg>Save settings</button>
+    <button class="btn" type="submit" form="test-alert"><svg class="i"><use href="#i-send"/></svg>Send a test alert</button></div>
 </form>
-<form method="post" action="{% url 'signals:test_alert' %}" style="margin-top:10px">{% csrf_token %}<button class="btn btn-sm" type="submit">Send a test alert</button></form>
+<form id="test-alert" method="post" action="{% url 'signals:test_alert' %}">{% csrf_token %}</form>
 {% endblock %}

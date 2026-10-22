@@ -74,8 +74,12 @@ def dashboard(request):
     trades = BrokerTrade.objects.select_related("instrument", "signal__profile")[:100]
     closed = BrokerTrade.objects.filter(status=BrokerTrade.Status.CLOSED)
     stats = closed.aggregate(n=Count("id"), wins=Count("id", filter=Q(realized_pl__gt=0)), pl=Sum("realized_pl"))
+    today = None
+    if trader.nav is not None and trader.day_start_nav:
+        change = trader.nav - trader.day_start_nav
+        today = {"amount": round(change, 2), "pct": round(100 * change / trader.day_start_nav, 2)}
     return render(request, "trading/dashboard.html", {
-        "trader": trader, "site": site, "form": form, "trades": trades, "stats": stats,
+        "trader": trader, "site": site, "form": form, "trades": trades, "stats": stats, "today": today,
         "open_trades": BrokerTrade.objects.filter(status=BrokerTrade.Status.OPEN).select_related("instrument"),
         "steps": _readiness(trader, site), "mt5": trader.broker_type == AutoTrader.Broker.MT5,
         "capital": trader.broker_type == AutoTrader.Broker.CAPITAL, "live": _is_live(trader, site),

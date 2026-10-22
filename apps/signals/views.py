@@ -49,12 +49,26 @@ def board(request):
             if state and (last_run is None or state.updated_at > last_run):
                 last_run = state.updated_at
     sessions, is_open = _session_status()
+    for r in rows:  # opportunities first, then running ideas, then the rest
+        s = r["state"]
+        r["kind"] = ("trade" if s and s.decision == "trade" else
+                     "inplay" if s and s.active_signal_id and s.active_signal.status == Signal.Status.OPEN else
+                     "wait" if s else "pending")
+    order = {"trade": 0, "inplay": 1, "wait": 2, "pending": 3}
+    rows.sort(key=lambda r: order[r["kind"]])
+    news = _upcoming_news(profile, [r["instrument"] for r in rows])
+    trader = None
+    if request.user.is_staff:
+        from apps.trading.models import AutoTrader
+
+        trader = AutoTrader.load()
     return render(request, "signals/board.html", {
         "profile": profile, "profiles": profiles, "rows": rows, "last_run": last_run,
         "sessions": sessions, "market_open": is_open, "site": SiteSettings.load(),
         "calibrated": bool(profile and profile.backtests.exists()),
-        "tuning": profile.latest_tuning if profile else None,
-        "news": _upcoming_news(profile, [r["instrument"] for r in rows]),
+        "tuning": profile.latest_tuning if profile else None, "news": news,
+        "next_news": news[0] if news else None, "trader": trader,
+        "n_trade": sum(r["kind"] == "trade" for r in rows), "n_inplay": sum(r["kind"] == "inplay" for r in rows),
     })
 
 
@@ -80,11 +94,17 @@ def pair_detail(request, profile_id, slug):
         raise Http404
     state = PairState.objects.filter(profile=profile, instrument=instrument).select_related("active_signal").first()
     signals = Signal.objects.filter(profile=profile, instrument=instrument)[:10]
+    active = state.active_signal if state and state.active_signal_id and         state.active_signal.status == Signal.Status.OPEN else None
+    shown = state if state and state.decision == "trade" else active
+    rr = None
+    if shown and shown.entry and shown.stop_loss and shown.take_profit:
+        risk, reward = abs(shown.entry - shown.stop_loss), abs(shown.take_profit - shown.entry)
+        if risk + reward:
+            rr = {"risk_pct": round(100 * risk / (risk + reward)), "reward_pct": round(100 * reward / (risk + reward)),
+                  "ratio": round(reward / risk, 1) if risk else None, "direction": shown.direction}
     return render(request, "signals/pair_detail.html", {
         "profile": profile, "instrument": instrument, "state": state, "signals": signals,
-        "active": state.active_signal if state and state.active_signal_id and
-        state.active_signal.status == Signal.Status.OPEN else None,
-        "run": profile.backtests.first(),
+        "active": active, "rr": rr, "run": profile.backtests.first(),
     })
 
 
@@ -127,7 +147,26 @@ def history(request):
     return render(request, "signals/history.html", {
         "profile": profile, "profiles": profiles, "signals": signals[:200], "stats": stats, "by_pair": by_pair,
         "open_count": signals.filter(status=Signal.Status.OPEN).count(),
+        "equity": _equity_curve(closed.exclude(result_r__isnull=True).order_by("closed_at", "candle_time")
+                                .values_list("result_r", flat=True)),
     })
+
+
+def _equity_curve(results, width=600, height=160, pad=8):
+    """SVG points for the running total of results (in R), oldest to newest."""
+    total, curve = 0.0, [0.0]
+    for r in results:
+        total += float(r)
+        curve.append(round(total, 2))
+    if len(curve) < 3:
+        return None
+    low, high = min(curve), max(curve)
+    span = (high - low) or 1.0
+    step = width / (len(curve) - 1)
+    y = lambda v: round(height - pad - (v - low) / span * (height - 2 * pad), 1)  # noqa: E731
+    points = " ".join(f"{round(i * step, 1)},{y(v)}" for i, v in enumerate(curve))
+    return {"points": points, "area": f"0,{height} {points} {width},{height}", "zero": y(0.0), "total": curve[-1],
+            "best": high, "worst": low, "count": len(curve) - 1, "width": width, "height": height}
 
 
 def backtests(request):
