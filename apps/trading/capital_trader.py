@@ -17,7 +17,7 @@ from apps.market.data import latest_price
 
 from .capital import BrokerError, CapitalBroker, epic_for
 from .models import BrokerTrade
-from .services import _blocking_news, _notify, apply_account, fresh_signals
+from .services import _blocking_news, _notify, apply_account, fresh_signals, stale_signals, trade_window
 
 log = logging.getLogger("apps.trading")
 
@@ -254,6 +254,12 @@ def capital_cycle(trader, now):
     s = broker.summary()
     apply_account(trader, s, now)
     trader.last_error = ""
+    for signal in stale_signals(trader, now):  # never let a late signal pass silently
+        age = int((now - signal.candle_time).total_seconds() // 60)
+        _skip(signal, f"Signal was already {age} minutes old when the auto-trader saw it (entry window "
+                      f"{int(trade_window(signal).total_seconds() // 60)} minutes): too late to enter safely.",
+              _env(broker))
+        summary["skipped"] += 1
     if trader.enabled and not trader.halted_until:
         signals = fresh_signals(trader, now)
         if signals:

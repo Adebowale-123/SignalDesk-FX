@@ -148,18 +148,28 @@ def position_units(risk_amount, entry, stop, loss_factor, units_precision, min_u
     return units if units >= min_units else 0
 
 
-def fresh_signals(trader, now):
+def trade_window(signal):
+    """How long after its candle closed a signal may still be entered."""
+    length = timedelta(minutes=TIMEFRAMES[signal.profile.entry_timeframe])
+    return min(length, timedelta(minutes=60)) + FRESH_GRACE
+
+
+def _untraded(trader):
     from apps.signals.models import Signal
 
     profiles = list(trader.traded_profiles())
-    signals = (Signal.objects.filter(status=Signal.Status.OPEN, profile__in=profiles, broker_trade__isnull=True)
-               .select_related("instrument", "profile").order_by("candle_time"))
-    out = []
-    for s in signals:
-        length = timedelta(minutes=TIMEFRAMES[s.profile.entry_timeframe])
-        if now - s.candle_time <= min(length, timedelta(minutes=60)) + FRESH_GRACE:
-            out.append(s)
-    return out
+    return (Signal.objects.filter(status=Signal.Status.OPEN, profile__in=profiles, broker_trade__isnull=True)
+            .select_related("instrument", "profile").order_by("candle_time"))
+
+
+def fresh_signals(trader, now):
+    return [s for s in _untraded(trader) if now - s.candle_time <= trade_window(s)]
+
+
+def stale_signals(trader, now, lookback=timedelta(hours=6)):
+    """Recent signals the auto-trader first saw only after their entry window had passed (e.g. late price data)."""
+    return [s for s in _untraded(trader).filter(created_at__gte=now - lookback)
+            if now - s.candle_time > trade_window(s)]
 
 
 def _record(signal, status, message, **fields):

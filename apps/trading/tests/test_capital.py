@@ -211,6 +211,18 @@ class CapitalCycleTests(CapitalTestCase):
         sent = [c.args[0] for c in self.notify.call_args_list]
         self.assertEqual(sent, ["Signal not traded: BUY EUR/USD"])  # once, not every cycle
 
+    def test_late_signal_is_recorded_not_ignored(self):
+        sig = self.signal(age=45)  # a 15m signal first seen 45 minutes after its candle
+        trade_cycle(now=NOW)
+        bt = BrokerTrade.objects.get(signal=sig)
+        self.assertEqual(bt.status, "skipped")
+        self.assertIn("45 minutes old", bt.message)
+        self.assertEqual(self.broker.orders, [])
+        old = self.signal(instrument=self.jpy, age=600, entry=158.0, sl=157.7, tp=158.6)
+        Signal.objects.filter(pk=old.pk).update(created_at=NOW - timedelta(hours=10))
+        trade_cycle(now=NOW)
+        self.assertFalse(BrokerTrade.objects.filter(signal=old).exists())  # long-gone signals stay quiet
+
     def test_close_all(self):
         self.signal()
         trade_cycle(now=NOW)
