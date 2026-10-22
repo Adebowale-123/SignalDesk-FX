@@ -208,10 +208,28 @@ def _auto_trade():
 
     try:
         result = trade_cycle()
-    except Exception:  # trading problems must never stop the analysis
+    except Exception as exc:  # trading problems must never stop the analysis
         log.exception("Auto-trading cycle failed")
+        _report_trading_failure(exc)
         return {"trading": "error"}
     return {f"trading_{k}": v for k, v in result.items()}
+
+
+def _report_trading_failure(exc):
+    """Show an unexpected auto-trading failure on the Auto-trading page, and alert once per distinct problem."""
+    from apps.trading.models import AutoTrader
+
+    try:
+        text = f"Auto-trading error ({exc.__class__.__name__}): {exc}"[:255]
+        trader = AutoTrader.load()
+        if trader.last_error != text:
+            AutoTrader.objects.filter(pk=trader.pk).update(last_error=text)
+            from apps.alerts.services import notify
+
+            notify("Auto-trading problem", [text, "Signals may not be traded until this is fixed. "
+                                                  "Details are in the server logs."])
+    except Exception:
+        log.exception("Could not report the auto-trading failure")
 
 
 def schedule_self_tuning():

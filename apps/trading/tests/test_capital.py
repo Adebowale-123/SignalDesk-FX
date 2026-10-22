@@ -86,6 +86,22 @@ class CapitalTestCase(TestCase):
             score=80, reasons=[], **kw)
 
 
+class FieldLengthTests(TestCase):
+    """SQLite ignores text length limits; PostgreSQL (production) enforces them. Check the values we write."""
+
+    def test_values_fit_their_columns(self):
+        env = BrokerTrade._meta.get_field("environment").max_length
+        for value in ("practice", "live", "mt5", "capital-demo", "capital-live"):
+            self.assertLessEqual(len(value), env, value)
+        reason = BrokerTrade._meta.get_field("close_reason").max_length
+        for value in ("tp", "sl", "expired", "closed"):
+            self.assertLessEqual(len(value), reason, value)
+        status = BrokerTrade._meta.get_field("status").max_length
+        self.assertTrue(all(len(v) <= status for v in BrokerTrade.Status.values))
+        deal = BrokerTrade._meta.get_field("broker_trade_id").max_length
+        self.assertGreaterEqual(deal, len("006011e7-0001-54c4-0000-000080560045"))  # Capital.com deal ID format
+
+
 class SizeTests(TestCase):
     def test_size_risks_the_chosen_amount(self):
         self.assertEqual(size_for(100, 0.0020, 1.0, 1, 100, 1), 50000)
@@ -222,6 +238,21 @@ class CapitalCycleTests(CapitalTestCase):
         Signal.objects.filter(pk=old.pk).update(created_at=NOW - timedelta(hours=10))
         trade_cycle(now=NOW)
         self.assertFalse(BrokerTrade.objects.filter(signal=old).exists())  # long-gone signals stay quiet
+
+    def test_saved_trades_pass_length_validation(self):
+        self.signal()
+        trade_cycle(now=NOW)
+        for bt in BrokerTrade.objects.all():
+            bt.full_clean()  # raises if any value is longer than its column allows
+
+    def test_unexpected_failure_is_shown_and_alerted_once(self):
+        from apps.signals.services import _auto_trade
+
+        with mock.patch("apps.trading.services.trade_cycle", side_effect=ValueError("boom")),                 mock.patch("apps.alerts.services.notify") as notify:
+            self.assertEqual(_auto_trade(), {"trading": "error"})
+            _auto_trade()
+        self.assertIn("ValueError", AutoTrader.load().last_error)
+        self.assertEqual(notify.call_count, 1)
 
     def test_close_all(self):
         self.signal()

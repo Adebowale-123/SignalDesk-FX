@@ -121,7 +121,7 @@ class BrokerTrade(models.Model):
 
     signal = models.OneToOneField("signals.Signal", on_delete=models.CASCADE, related_name="broker_trade")
     instrument = models.ForeignKey("market.Instrument", on_delete=models.CASCADE, related_name="broker_trades")
-    environment = models.CharField(max_length=10, default="practice")
+    environment = models.CharField(max_length=20, default="practice")  # practice / live / mt5 / capital-demo…
     direction = models.CharField(max_length=4)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     units = models.IntegerField(default=0)
