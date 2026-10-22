@@ -199,6 +199,18 @@ class CapitalCycleTests(CapitalTestCase):
         self.assertEqual(float(saved.risk_percent), 0.5)
         self.assertIsNotNone(saved.last_sync_at)
 
+    def test_signals_while_off_are_recorded_and_announced_once(self):
+        AutoTrader.objects.update(enabled=False)
+        sig = self.signal()
+        trade_cycle(now=NOW)
+        trade_cycle(now=NOW + timedelta(minutes=5))
+        bt = BrokerTrade.objects.get(signal=sig)
+        self.assertEqual(bt.status, "skipped")
+        self.assertIn("switched OFF", bt.message)
+        self.assertEqual(self.broker.orders, [])
+        sent = [c.args[0] for c in self.notify.call_args_list]
+        self.assertEqual(sent, ["Signal not traded: BUY EUR/USD"])  # once, not every cycle
+
     def test_close_all(self):
         self.signal()
         trade_cycle(now=NOW)

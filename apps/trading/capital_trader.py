@@ -146,8 +146,19 @@ class _Skip(Exception):
 
 
 def _skip(signal, message, env):
-    return BrokerTrade.objects.create(signal=signal, instrument=signal.instrument, direction=signal.direction,
-                                      environment=env, status=BrokerTrade.Status.SKIPPED, message=message[:255])
+    bt = BrokerTrade.objects.create(signal=signal, instrument=signal.instrument, direction=signal.direction,
+                                    environment=env, status=BrokerTrade.Status.SKIPPED, message=message[:255])
+    _notify_skip(signal, message)
+    return bt
+
+
+def _notify_skip(signal, message):
+    """Every signal gets a message, traded or not, so silence never leaves you guessing."""
+    i = signal.instrument
+    _notify(f"Signal not traded: {signal.direction.upper()} {i}", [
+        f"⏭ {signal.direction.upper()} {i} ({signal.profile}) was not traded.",
+        f"Reason: {message}",
+        f"Signal levels: entry {i.fmt(signal.entry)} · SL {i.fmt(signal.stop_loss)} · TP {i.fmt(signal.take_profit)}"])
 
 
 def open_position(signal, trader, broker, account, busy, now):
@@ -202,6 +213,7 @@ def open_position(signal, trader, broker, account, busy, now):
     except _Skip as skip:
         bt.status, bt.message = BrokerTrade.Status.SKIPPED, str(skip)[:255]
         bt.save()
+        _notify_skip(signal, str(skip))
         return bt
     except BrokerError as exc:
         text = str(exc)
@@ -254,6 +266,12 @@ def capital_cycle(trader, now):
                     summary["opened"] += 1
                 elif bt:
                     summary["skipped"] += 1
+    else:  # off or paused: still record (and tell you about) each new signal, once
+        reason = (f"auto-trading is paused: {trader.halt_reason}" if trader.enabled else
+                  "auto-trading was switched OFF on the Auto-trading page.")
+        for signal in fresh_signals(trader, now):
+            _skip(signal, reason[0].upper() + reason[1:], _env(broker))
+            summary["skipped"] += 1
     return summary
 
 
