@@ -419,3 +419,6 @@ legend { font-weight: 800; padding: 4px 12px; border-radius: 999px; background: 
 .login-form { display: grid; place-items: center; padding: 32px 20px; }
 .login-box { width: 100%; max-width: 380px; }
 @media (max-width: 860px) { .login-wrap { grid-template-columns: 1fr; } .login-art { display: none; } }
+
+/* Phones: side-by-side sections stack into one column */
+@media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr !important; } }
