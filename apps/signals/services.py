@@ -169,7 +169,7 @@ def run_cycle():
                     transaction.on_commit(lambda s=new_signal: alert_new_signal(s))
             for sig in closed:
                 summary["closed"] += 1
-                if site.alert_on_close:
+                if site.alert_on_close and not _was_traded(sig):  # traded ones get the broker's own message
                     transaction.on_commit(lambda s=sig: alert_closed(s))
     summary.update(_auto_trade())
     if getattr(settings, "AUTO_MAINTENANCE", True):
@@ -200,6 +200,13 @@ def schedule_discovery(site):
     due = site.last_discovered_at is None or now - site.last_discovered_at >= timedelta(days=site.discover_every_days)
     if due or interrupted:
         background.start("discover", discover)
+
+
+def _was_traded(signal):
+    from apps.trading.models import BrokerTrade
+
+    return BrokerTrade.objects.filter(signal=signal, status__in=[BrokerTrade.Status.OPEN,
+                                                                 BrokerTrade.Status.CLOSED]).exists()
 
 
 def _auto_trade():

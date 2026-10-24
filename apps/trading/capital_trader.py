@@ -116,6 +116,12 @@ def sync(broker, trader, positions, now):
                 reason, level = "closed", None
             if reason == "closed" and bt.signal.status == "expired":
                 reason = "expired"
+            # A stop or target fills at its own level. (Capital.com's activity "level" can be the opening price,
+            # which made results read as 0.00.)
+            if reason == "sl" and bt.stop_loss:
+                level = bt.stop_loss
+            elif reason == "tp" and bt.take_profit:
+                level = bt.take_profit
         bt.status, bt.close_reason, bt.closed_at = BrokerTrade.Status.CLOSED, reason, now
         bt.close_price = level
         if level and bt.fill_price and bt.lots:

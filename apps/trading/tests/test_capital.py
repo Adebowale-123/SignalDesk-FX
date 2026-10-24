@@ -140,6 +140,29 @@ class CapitalCycleTests(CapitalTestCase):
         trade_cycle(now=NOW + timedelta(hours=1, minutes=2))
         self.assertEqual(len(self.broker.orders), 2)
 
+    def test_stop_loss_result_uses_the_stop_level(self):
+        sig = self.signal(direction="sell", entry=1.11936, sl=1.12032, tp=1.11648)
+        trade_cycle(now=NOW)
+        bt = BrokerTrade.objects.get(signal=sig)
+        self.broker.open = []
+        self.broker.reasons[bt.broker_trade_id] = ("sl", bt.fill_price)  # Capital.com reports the opening level
+        trade_cycle(now=NOW + timedelta(hours=1))
+        bt.refresh_from_db()
+        self.assertEqual(bt.close_reason, "sl")
+        self.assertAlmostEqual(bt.close_price, bt.stop_loss)
+        self.assertLess(bt.realized_pl, -9)  # about -1% of the account, not 0.00
+
+    def test_traded_signal_gets_one_close_message(self):
+        from apps.signals.services import _was_traded
+
+        traded, untraded = self.signal(), self.signal(instrument=self.jpy, entry=158.0, sl=157.7, tp=158.6)
+        BrokerTrade.objects.create(signal=traded, instrument=self.eur, direction="buy", status="closed",
+                                   environment="capital-demo")
+        BrokerTrade.objects.create(signal=untraded, instrument=self.jpy, direction="buy", status="skipped",
+                                   environment="capital-demo")
+        self.assertTrue(_was_traded(traded))
+        self.assertFalse(_was_traded(untraded))
+
     def test_expired_signal_closes_the_position(self):
         sig = self.signal()
         trade_cycle(now=NOW)
